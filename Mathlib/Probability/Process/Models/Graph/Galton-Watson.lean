@@ -23,10 +23,10 @@ attribute [simp] root_no_parent
 section LE
 variable {V : Type*} {κ : WithBot V → Type*} {F : RootedForest V κ}
 
-scoped infix:50 " ≺ " => @parent_child _ _ _
-scoped notation:50 a " ≺[" F:50 "] " b => @parent_child _ _ (F : RootedForest _ ‹_›) a b
+scoped infix:50 " < " => @parent_child _ _ _
+scoped notation:50 a " <[" F:50 "] " b => @parent_child _ _ (F : RootedForest _ ‹_›) a b
 
-@[simp] lemma false_of_not_acyclic {u v v'} (huv : v ≺[F] u) (huv' : v' ≺[F] u) (hvv' : v ≠ v') :
+@[simp] lemma false_of_not_acyclic {u v v'} (huv : v <[F] u) (huv' : v' <[F] u) (hvv' : v ≠ v') :
   False := by exact hvv' <| F.acyclic huv huv'
 
 @[simp] lemma root_branch_nonempty_of_has_isOrigin {u} (hu : F.IsOrigin u) : Nonempty (κ ⊥) := by
@@ -75,46 +75,36 @@ lemma isOrigin_of_has_root_parent {u} (hu : F.parent_child ⊥ u) : F.IsOrigin u
 instance instLT : LT V where
   lt u v := @parent_child _ _ F (u : WithBot V) (v : WithBot V)
 
-scoped notation:50 a " ᵖ≺ " b => @LT.lt _ (instLT _) a b
-scoped notation:50 a " ᵖ≺[" F:50 "] " b => @LT.lt _ (instLT (F : RootedForest _ ‹_›)) a b
+scoped notation:50 a " ᵖ< " b => @LT.lt _ (instLT _) a b
+scoped notation:50 a " ᵖ<[" F:50 "] " b => @LT.lt _ (instLT (F : RootedForest _ ‹_›)) a b
 
 def toSimpleGraph : SimpleGraph (WithBot V) where
-  Adj u v := (u ≺[F] v) ∨ (v ≺[F] u)
+  Adj u v := (u <[F] v) ∨ (v <[F] u)
   loopless u := by simp [loopless]
 
 def support := F.toSimpleGraph.support
 
-lemma root_or_has_parent_of_mem_support {u} : u ∈ F.support → u = ⊥ ∨ ∃ v, v ≺[F] u := by
+lemma root_or_has_parent_of_mem_support {u} : u ∈ F.support → u = ⊥ ∨ ∃ v, v <[F] u := by
   intro ⟨v, huv⟩; simp [toSimpleGraph] at huv; by_cases u = ⊥
   · left; assumption
   · right; by_cases hu : F.IsOrigin u
     · use ⊥; simp [*]
     · simp only [isOrigin_def, not_and_or] at hu; cases hu <;> aesop
 
-lemma mem_support_of_parent {u v} (_ : u ≺[F] v) : u ∈ F.support := by
+lemma mem_support_of_parent {u v} (_ : u <[F] v) : u ∈ F.support := by
   simp_all [support, toSimpleGraph, SimpleGraph.support]; use v; left; assumption
 
-lemma mem_support_of_child {u v} (_ : u ≺[F] v) : v ∈ F.support := by
+lemma mem_support_of_child {u v} (_ : u <[F] v) : v ∈ F.support := by
   simp_all [support, toSimpleGraph, SimpleGraph.support]; use u; right; assumption
 
 open SimpleGraph Walk in
-lemma mem_support_of_walk_start_not_nil {u v : WithBot V} (puv : F.toSimpleGraph.Walk u v)
+private lemma mem_support_of_walk_start_not_nil {u v : WithBot V} (puv : F.toSimpleGraph.Walk u v)
   (hpuv : ¬puv.Nil) : u ∈ F.support := by
   have : 0 < puv.length := by simp [not_nil_iff_lt_length.1, *]
   have := puv.getVert_zero ▸ puv.adj_getVert_succ this
   simp [toSimpleGraph] at this; cases this
   · exact mem_support_of_parent ‹_›
   · exact mem_support_of_child ‹_›
-
--- @[simp] def Nonempty := F.toSimpleGraph.support.Nonempty
-
--- @[simp] lemma nonempty_iff : F.Nonempty ↔ _root_.Nonempty (κ ⊥) := by
---   sorry
-
--- instance : CoeOut (F.Nonempty) (_root_.Nonempty (κ ⊥)) := sorry
-
--- @[simp] lemma not_isOrigin_of_empty (hF : ¬F.Nonempty) {u} : ¬F.IsOrigin u := by
---   simp [Set.Nonempty, SimpleGraph.support, toSimpleGraph] at hF; simp [isOrigin_def, *]
 
 def Descend {u v} (p : F.toSimpleGraph.Walk u v) := p.support.IsChain F.parent_child
 
@@ -245,27 +235,13 @@ scoped infix:50 " ≥ " => fun u v => @ancester_descendant _ _ _ v u
 scoped notation:50 a " ≤[" F:50 "] " b => @ancester_descendant _ _ (F : RootedForest _ ‹_›) a b
 scoped notation:50 a " ≥[" F:50 "] " b => @ancester_descendant _ _ (F : RootedForest _ ‹_›) b a
 
-@[simp] lemma parent_child_not_commu {u v} (huv : u ≺[F] v) : ¬v ≺[F] u := by
-  match u with
-  | ⊥ => simp
-  | some u0 =>
-    match v with
-    | ⊥ => simp at huv
-    | some v0 =>
-      have := descend_from_root <| not_isIsolated_of_child huv
-      sorry
-
-variable {u v : WithBot V}
-#check u ≥ v
-
-@[simp] lemma subrelation : Subrelation F.parent_child F.ancester_descendant := by
+@[simp] lemma toAncesterDescendant : Subrelation F.parent_child F.ancester_descendant := by
   simp [Subrelation, ancester_descendant]; intro u v _
-  use (show F.toSimpleGraph.Adj u v from by simp [toSimpleGraph, *]).toWalk; simp [*]
+  use (show F.toSimpleGraph.Adj u v from by simp [toSimpleGraph, *]).toWalk; simp [Descend, *]
 
-@[simp] lemma subrelation' : Subrelation (@WithBot.LT _ (instLT F)) F.ancester_descendant := by
-  sorry
-
-lemma wellfounded' : WellFounded F.ancester_descendant := by sorry
+@[simp] lemma parent_child_not_commu {u v} (huv : u <[F] v) : ¬v <[F] u := by
+  by_contra hvu; have := F.instPartialOrderWithBot.le_antisymm u v (F.toAncesterDescendant huv)
+    (F.toAncesterDescendant hvu); subst_vars; exact F.loopless v huv
 
 end LE
 
@@ -369,9 +345,9 @@ class Branching where
 
 namespace Branching
 
-scoped infix:50 " ᵖ≺ " => @parent_child _ _ _
+scoped infix:50 " ᵖ< " => @parent_child _ _ _
 scoped infix:50 " ≻ᵖ " => fun a b => @parent_child _ _ _ b a
-scoped notation:50 a " ᵖ≺[" B:50 "] " b => @parent_child _ _ (B : Branching _ ‹_›) a b
+scoped notation:50 a " ᵖ<[" B:50 "] " b => @parent_child _ _ (B : Branching _ ‹_›) a b
 scoped notation:50 b " ≻ᵖ[" B:50 "] " a => @parent_child _ _ (B : Branching _ ‹_›) b a
 
 class Forest extends Branching V β where
@@ -391,7 +367,7 @@ lemma parent_child_wellfounded {F : Forest V β} : WellFounded F.parent_child :=
 instance (F : Forest V β) : WellFoundedRelation V := ⟨F.parent_child, F.parent_child_wellfounded⟩
 
 lemma is_origin_def_parent_child {F : Forest V β} (v : V) :
-  F.is_origin v ↔ (∃ u, v ᵖ≺[F] u) ∧ ¬∃ u, u ᵖ≺[F] v := by simp [is_origin_def]
+  F.is_origin v ↔ (∃ u, v ᵖ<[F] u) ∧ ¬∃ u, u ᵖ<[F] v := by simp [is_origin_def]
 
 noncomputable instance (F : Forest V β) (v : V) : Decidable (F.is_origin v) :=
   Classical.dec _
@@ -459,21 +435,21 @@ instance : CoeOut (Rooted V β ρ) (Forest V β) where
   | ⊥, ⊥ => False
   | ⊥, some v => ∃ i, FR.root i = v
   | some _, ⊥ => False
-  | some u, some v => u ᵖ≺[FR] v
+  | some u, some v => u ᵖ<[FR] v
 
 @[simp] def root_parent_child {FR : Rooted V β ρ} : WithRoot V → WithRoot V → Prop
   | .root _, .root _ => False
   | .root _, .node v => ∃ i, FR.root i = v
   | .node _, .root _ => False
-  | .node u, .node v => u ᵖ≺[FR] v
+  | .node u, .node v => u ᵖ<[FR] v
 
-scoped infix:50 " ᵖʳ≺ " => root_parent_child
+scoped infix:50 " ᵖʳ< " => root_parent_child
 scoped infix:50 " ≻ᵖʳ " => fun a b => root_parent_child b a
-scoped notation:50 a " ᵖʳ≺[" F:50 "] " b => @root_parent_child _ _ _ (F : Rooted _ ‹_› ‹_›) a b
+scoped notation:50 a " ᵖʳ<[" F:50 "] " b => @root_parent_child _ _ _ (F : Rooted _ ‹_› ‹_›) a b
 scoped notation:50 b " ≻ᵖʳ[" F:50 "] " a => @root_parent_child _ _ _ (F : Rooted _ ‹_› ‹_›) a b
 
 def toSimpleGraph_rooted (FR : Rooted V β ρ) : SimpleGraph (WithRoot V) where
-  Adj u v := (u ᵖʳ≺[FR] v) ∨ (v ᵖʳ≺[FR] u)
+  Adj u v := (u ᵖʳ<[FR] v) ∨ (v ᵖʳ<[FR] u)
   loopless u := by match u with
     | .root _ => simp
     | .node u => simp; have := FR.loopless; simp at this; exact this u
@@ -583,10 +559,10 @@ end Forest
 variable {V : Type*} {β : V → Type*} {ρ : Unit → Type*}
 
 def toSimpleGraph (B : Branching V β) : SimpleGraph V where
-  Adj u v := (u ᵖ≺[B] v) ∨ (v ᵖ≺[B] u)
+  Adj u v := (u ᵖ<[B] v) ∨ (v ᵖ<[B] u)
   loopless u := by simp; have := B.loopless u; simp at this; exact this
 
-lemma adj_of_parent_child {B : Branching V β} (u v : V) (huv : u ᵖ≺[B] v) :
+lemma adj_of_parent_child {B : Branching V β} (u v : V) (huv : u ᵖ<[B] v) :
   B.toSimpleGraph.Adj u v := by simp only [toSimpleGraph]; simp_all only [true_or]
 
 open SimpleGraph in
@@ -1229,7 +1205,7 @@ lemma origin_component_ne {F : Forest V β} (u v : V) (hu : F.is_origin u) (hv :
   by_contra; exact F.two_origins_not_reachable u v hu hv huv <| ConnectedComponent.exact ‹_›
 
 open SimpleGraph in
-lemma origin_reachable {F : Forest V β} (u : V) (hu : F.is_origin u ∨ ∃ v, v ᵖ≺[F] u) :
+lemma origin_reachable {F : Forest V β} (u : V) (hu : F.is_origin u ∨ ∃ v, v ᵖ<[F] u) :
   ∃ v, ∃ (_ : F.is_origin v), F.toSimpleGraph.Reachable u v := by
   induction u using F.origin_wellfounded.induction with
   | h u0 hu0 =>
@@ -1237,7 +1213,7 @@ lemma origin_reachable {F : Forest V β} (u : V) (hu : F.is_origin u ∨ ∃ v, 
     · use u0
     · have := Or.resolve_left hu hu0'
       rcases this with ⟨v, hv⟩; specialize hu0 v hv
-      by_cases hv' : F.is_origin v ∨ ∃ v', v' ᵖ≺[F] v
+      by_cases hv' : F.is_origin v ∨ ∃ v', v' ᵖ<[F] v
       · specialize hu0 hv'; rcases hu0 with ⟨v', hv', ⟨wvv'⟩⟩; use v', hv'
         exact ⟨(Adj.toWalk (adj_of_parent_child v u0 hv)).reverse.append wvv'⟩
       · simp only [is_origin_def_parent_child, not_or, not_and'] at hv';
@@ -1260,7 +1236,7 @@ lemma origin_reachable {F : Forest V β} (u : V) (hu : F.is_origin u ∨ ∃ v, 
 
 namespace Rooted
 
-lemma adj_rooted_of_parent_child {FR : Rooted V β ρ} {u v : V} (huv : u ᵖ≺[FR] v) :
+lemma adj_rooted_of_parent_child {FR : Rooted V β ρ} {u v : V} (huv : u ᵖ<[FR] v) :
   FR.toSimpleGraph_rooted.Adj u v := by
   simp only [toSimpleGraph_rooted]; simp_all only [root_parent_child, true_or]
 
@@ -1315,7 +1291,7 @@ lemma is_origin_getVert_one_of_walk_from_root_of_rooted {FR : Rooted V β ρ}
 def toSimpleGraph_rooted' (FR : Rooted V β ρ) := FR.toSimpleGraph_rooted.graph_of_support
 
 open SimpleGraph in
-lemma adj_rooted'_of_parent_child {FR : Rooted V β ρ} {u v : V} (huv : u ᵖ≺[FR] v) :
+lemma adj_rooted'_of_parent_child {FR : Rooted V β ρ} {u v : V} (huv : u ᵖ<[FR] v) :
   FR.toSimpleGraph_rooted'.Adj ⟨u, by
     simp [subgraph_of_support, support]; use v; simp [toSimpleGraph_rooted]; exact Or.inl huv
   ⟩  ⟨v, by
@@ -1365,7 +1341,7 @@ lemma mem_toSimpleGraph_unrooted_subgraph_of_support_verts_of_is_origin {FR : Ro
   use u; simp [toSimpleGraph_unrooted_sub, toSimpleGraph_unrooted, toSimpleGraph_rooted]
   exact Or.inl hu
 
-lemma adj_unrooted_of_parent_child {FR : Rooted V β ρ} {u v : V} (huv : u ᵖ≺[FR] v) :
+lemma adj_unrooted_of_parent_child {FR : Rooted V β ρ} {u v : V} (huv : u ᵖ<[FR] v) :
   FR.toSimpleGraph_unrooted.Adj u v := by
   simp [toSimpleGraph_unrooted, toSimpleGraph_unrooted_sub]
   exact adj_rooted_of_parent_child huv
@@ -2472,7 +2448,7 @@ instance instNonemptyForestStandard_SubgraphSupportVerts :
 
 variable (FS : Forest.Standard ℕ (fun _ => 2) fun _ => 2)
 #check FS.isAcyclic
-#check 1 ᵖ≺ 2
+#check 1 ᵖ< 2
 end Standard
 
 end Forest
