@@ -4,18 +4,21 @@ import Mathlib.Combinatorics.SimpleGraph.Connectivity.Subgraph
 variable (V : Type*) (κ : WithBot V → Type*)
 
 class RootedForest where
-  branch : (v : WithBot V) → (κ v → V)
+  branch : (v : WithBot V) → (κ v → WithBot V)
   parent_child : (WithBot V) → (WithBot V) → Prop
   parent_child_def : ∀ u v, parent_child u v ↔ ∃ j, branch u j = v
+  root_no_parent : ∀ v, ¬ parent_child v ⊥
   acyclic : ∀ {u v w}, parent_child u w → parent_child v w → u = v
   loopless : ∀ u, ¬ parent_child u u
   wellfounded : WellFounded parent_child
-  IsOrigin (v : V) : Prop
-  isOrigin_def : ∀ v, IsOrigin v ↔ (∃ u, parent_child v u) ∧ ¬∃ (u : V), parent_child u v
+  IsOrigin (v : WithBot V) : Prop
+  isOrigin_def : ∀ v, IsOrigin v ↔ (∃ u, parent_child v u) ∧ (∀ u, parent_child u v → u = ⊥)
   root_bij : Set.BijOn (branch ⊥) Set.univ { v | IsOrigin v }
   node_bij {v : V} : Set.BijOn (branch v) Set.univ { u | ∃ j, branch v j = u }
 
 namespace RootedForest
+
+attribute [simp] root_no_parent
 
 section LE
 variable {V : Type*} {κ : WithBot V → Type*} {F : RootedForest V κ}
@@ -26,12 +29,6 @@ scoped notation:50 a " ≺[" F:50 "] " b => @parent_child _ _ (F : RootedForest 
 @[simp] lemma false_of_not_acyclic {u v v'} (huv : v ≺[F] u) (huv' : v' ≺[F] u) (hvv' : v ≠ v') :
   False := by exact hvv' <| F.acyclic huv huv'
 
-@[simp] lemma no_parent_of_root : ∀ v, ¬ F.parent_child v ⊥ := by simp [parent_child_def]
-
-@[simp] lemma acc_of_root : Acc F.parent_child ⊥ := by simp [Acc.intro]
-
-@[simp] def IsOrigin' (v : WithBot V) := ∃ (hv : v ≠ ⊥), F.IsOrigin (v.unbot hv)
-
 @[simp] lemma root_branch_nonempty_of_has_isOrigin {u} (hu : F.IsOrigin u) : Nonempty (κ ⊥) := by
   have := Set.mem_of_subset_of_mem F.root_bij.surjOn <| Set.mem_setOf.2 hu
   simp at this; obtain ⟨j, hj⟩ := this; exact ⟨j⟩
@@ -40,18 +37,10 @@ scoped notation:50 a " ≺[" F:50 "] " b => @parent_child _ _ (F : RootedForest 
   have := Set.mem_of_subset_of_mem F.root_bij.surjOn <| Set.mem_setOf.2 hu
   simp at this; simp [parent_child_def, *]
 
-@[simp] lemma has_root_parent_of_isOrigin' {u} (hu : F.IsOrigin' u) : F.parent_child ⊥ u := by
-  obtain ⟨hu', hu⟩ := hu; set u0 := u.unbot hu'; rw [show u = u0 from by simp [u0]]; simp [*]
-
 lemma only_has_root_parent_of_isOrigin {u} (hu : F.IsOrigin u) :
   ∀ v, F.parent_child v u → v = ⊥ := by
   intro v huv; have := F.has_root_parent_of_isOrigin hu; simp [isOrigin_def] at hu
   cases v <;> aesop
-
-lemma only_has_root_parent_of_isOrigin' {u} (hu : F.IsOrigin' u) :
-  ∀ v, F.parent_child v u → v = ⊥ := by
-  obtain ⟨hu', hu⟩ := hu; set u0 := u.unbot hu'; rw [show u = u0 from by simp [u0]]
-  exact F.only_has_root_parent_of_isOrigin ‹_›
 
 noncomputable def root_inv [Nonempty (κ ⊥)] := Function.invFunOn (F.branch ⊥) Set.univ
 
@@ -75,7 +64,7 @@ def root_inv_bij [Nonempty (κ ⊥)]
   F.branch ⊥ (@F.root_inv _ _ (F.root_branch_nonempty_of_has_isOrigin hv) v) = v :=
   (@F.root_inv_on _ _ (F.root_branch_nonempty_of_has_isOrigin hv)).right <| Set.mem_setOf.mpr hv
 
-@[simp] lemma isOrigin_of_has_root_parent {u : V} (hu : F.parent_child ⊥ u) : F.IsOrigin u := by
+lemma isOrigin_of_has_root_parent {u} (hu : F.parent_child ⊥ u) : F.IsOrigin u := by
   simp [parent_child_def] at hu; obtain ⟨j, hj⟩ := hu; have : Nonempty (κ ⊥) := ⟨j⟩
   let hj' := hj; apply congrArg (@F.root_inv _ _ ⟨j⟩) at hj; simp at hj
   have := Set.mem_of_subset_of_mem F.root_inv_bij.surjOn (hj ▸ Set.mem_univ j)
@@ -83,81 +72,49 @@ def root_inv_bij [Nonempty (κ ⊥)]
   simp only [Set.mem_setOf_eq] at hv; rw [←hj] at hvu; apply congrArg (F.branch ⊥) at hvu
   simp [*, -hj] at hvu; exact hvu ▸ hv
 
-@[simp] lemma isOrigin_of_has_root_parent' {u : WithBot V} (hu : F.parent_child ⊥ u) :
-  F.IsOrigin' u := by
-  have : u ≠ ⊥ := (by simp [parent_child_def] at hu; aesop); use this
-  set u0 := u.unbot this; rw [show u = u0 from by simp [u0]] at hu; simp [*]
-
 instance instLT : LT V where
   lt u v := @parent_child _ _ F (u : WithBot V) (v : WithBot V)
 
 scoped notation:50 a " ᵖ≺ " b => @LT.lt _ (instLT _) a b
 scoped notation:50 a " ᵖ≺[" F:50 "] " b => @LT.lt _ (instLT (F : RootedForest _ ‹_›)) a b
 
-attribute [simp] loopless
 def toSimpleGraph : SimpleGraph (WithBot V) where
   Adj u v := (u ≺[F] v) ∨ (v ≺[F] u)
-  loopless u := by simp
+  loopless u := by simp [loopless]
 
-@[simp] def Nonempty := F.toSimpleGraph.support.Nonempty
+def support := F.toSimpleGraph.support
 
-@[simp] lemma nonempty_iff : F.Nonempty ↔ _root_.Nonempty (κ ⊥) := by
-  sorry
+lemma root_or_has_parent_of_mem_support {u} : u ∈ F.support → u = ⊥ ∨ ∃ v, v ≺[F] u := by
+  intro ⟨v, huv⟩; simp [toSimpleGraph] at huv; by_cases u = ⊥
+  · left; assumption
+  · right; by_cases hu : F.IsOrigin u
+    · use ⊥; simp [*]
+    · simp only [isOrigin_def, not_and_or] at hu; cases hu <;> aesop
 
-instance : CoeOut (F.Nonempty) (_root_.Nonempty (κ ⊥)) := sorry
+lemma mem_support_of_parent {u v} (_ : u ≺[F] v) : u ∈ F.support := by
+  simp_all [support, toSimpleGraph, SimpleGraph.support]; use v; left; assumption
 
-@[simp] lemma not_isOrigin_of_empty (hF : ¬F.Nonempty) {u} : ¬F.IsOrigin u := by
-  simp [Set.Nonempty, SimpleGraph.support, toSimpleGraph] at hF; simp [isOrigin_def, *]
-
-def IsIsolated (u : V) := ↑u ∉ F.toSimpleGraph.support
-
-@[simp] def IsIsolated' (u : WithBot V) := ∃ (hu : u ≠ ⊥), F.IsIsolated (u.unbot hu)
-
-lemma isIsolated_iff_no_parent {u} : F.IsIsolated u ↔ ¬∃ v, v ≺[F] u := by
-  simp [IsIsolated, toSimpleGraph, SimpleGraph.support];
-  exact ⟨by aesop, by intro hu v; exact ⟨by
-    by_contra hu'; have : F.IsOrigin u := by simp [isOrigin_def, *]; use v
-    have := F.has_root_parent_of_isOrigin this; aesop, hu v⟩⟩
-
-lemma isIsolated'_iff_no_parent {u} : F.IsIsolated' u ↔ u ≠ ⊥ ∧ ¬∃ v, v ≺[F] u := by
-  simp [-not_exists]; constructor
-  · intro hu; obtain ⟨hu, hu'⟩ := hu; simp [isIsolated_iff_no_parent] at hu'; simp [*]
-  · intro hu; use hu.left;
-    conv at hu => right; congr; congr; ext; arg 3; rw [(show u = ↑(u.unbot hu.left) from by simp)]
-    exact F.isIsolated_iff_no_parent.2 hu.right
-
-@[simp] lemma isIsolated_of_empty (hF : ¬F.Nonempty) {u} : F.IsIsolated u := by
-  simp [Set.Nonempty] at ⊢ hF; simp [*, IsIsolated]
-
-lemma acc_of_isIsolated {u} (hu : F.IsIsolated u) : Acc F.parent_child u := by
-  have := F.isIsolated_iff_no_parent.1 hu; apply Acc.intro; aesop
-
-lemma not_isIsolated_of_isOrigin {u} (hu : F.IsOrigin u) : ¬F.IsIsolated u := by
-  simp [isOrigin_def] at hu;
-  simp [IsIsolated, toSimpleGraph, SimpleGraph.support, -not_and, not_and_or]
-  obtain ⟨⟨v, _⟩, _⟩ := hu; use v; simp [*]
-
-lemma not_isIsolated_of_parent {u : V} {v : WithBot V} (huv : u ≺[F] v) :
-  ¬F.IsIsolated u := by
-  simp [IsIsolated, SimpleGraph.support, toSimpleGraph, -not_and, not_and_or]; use v; simp [*]
-
-lemma not_isIsolated_of_child {v : V} {u : WithBot V} (huv : u ≺[F] v) :
-  ¬F.IsIsolated v := by
-  simp [IsIsolated, SimpleGraph.support, toSimpleGraph, -not_and, not_and_or]; use u; simp [*]
-
-lemma not_isIsolated_of_adj {u : V} {v : WithBot V} (huv : F.toSimpleGraph.Adj u v) :
-  ¬F.IsIsolated u := by
-  simp [toSimpleGraph] at huv; cases huv
-  · exact F.not_isIsolated_of_parent ‹_›
-  · exact F.not_isIsolated_of_child ‹_›
+lemma mem_support_of_child {u v} (_ : u ≺[F] v) : v ∈ F.support := by
+  simp_all [support, toSimpleGraph, SimpleGraph.support]; use u; right; assumption
 
 open SimpleGraph Walk in
-lemma not_isIsolated_of_walk_not_nil' {u v : WithBot V} (puv : F.toSimpleGraph.Walk u v)
-  (hpuv : ¬puv.Nil) (hu : u ≠ ⊥) : ¬F.IsIsolated (u.unbot hu) := by
+lemma mem_support_of_walk_start_not_nil {u v : WithBot V} (puv : F.toSimpleGraph.Walk u v)
+  (hpuv : ¬puv.Nil) : u ∈ F.support := by
   have : 0 < puv.length := by simp [not_nil_iff_lt_length.1, *]
   have := puv.getVert_zero ▸ puv.adj_getVert_succ this
-  conv at this => arg 2; rw [(show u = ↑(u.unbot hu) from by simp)]
-  exact not_isIsolated_of_adj this
+  simp [toSimpleGraph] at this; cases this
+  · exact mem_support_of_parent ‹_›
+  · exact mem_support_of_child ‹_›
+
+-- @[simp] def Nonempty := F.toSimpleGraph.support.Nonempty
+
+-- @[simp] lemma nonempty_iff : F.Nonempty ↔ _root_.Nonempty (κ ⊥) := by
+--   sorry
+
+-- instance : CoeOut (F.Nonempty) (_root_.Nonempty (κ ⊥)) := sorry
+
+-- @[simp] lemma not_isOrigin_of_empty (hF : ¬F.Nonempty) {u} : ¬F.IsOrigin u := by
+--   simp [Set.Nonempty, SimpleGraph.support, toSimpleGraph] at hF; simp [isOrigin_def, *]
 
 def Descend {u v} (p : F.toSimpleGraph.Walk u v) := p.support.IsChain F.parent_child
 
@@ -173,49 +130,28 @@ open SimpleGraph Walk List in
     have : p.support.getLast (show p.support ≠ [] from by simp) = v := by simp
     simp [Descend, support_append, List.isChain_append, List.getLast?_eq_getLast, *]; exact hq.left
 
-@[simp] lemma descend_copy {u v u' v' : WithBot V} (p : F.toSimpleGraph.Walk u v)
-  (hu : u = u') (hv : v = v') : Descend p → Descend (p.copy hu hv) := by simp [Descend]
+@[simp] lemma descend_copy {u v u' v' : WithBot V} {p : F.toSimpleGraph.Walk u v}
+  {hu : u = u'} {hv : v = v'} : Descend (p.copy hu hv) → Descend p := by simp [Descend]
 
 lemma descend_copy_iff {u v u' v' : WithBot V} (p : F.toSimpleGraph.Walk u v)
   (hu : u = u') (hv : v = v') : Descend p ↔ Descend (p.copy hu hv) := by simp [Descend]
 
-@[simp] lemma descend_from_rootᵣ : ∃ p : F.toSimpleGraph.Walk ⊥ ⊥, Descend p := by
-  use SimpleGraph.Walk.nil; simp [Descend]
-
-private lemma descend_from_rootₒ {u} (hu : F.IsOrigin u) :
+@[simp] lemma descend_from_root {u} : u ∈ F.support →
   ∃ p : F.toSimpleGraph.Walk ⊥ u, Descend p := by
-  have := F.has_root_parent_of_isOrigin hu
-  have : F.toSimpleGraph.Adj ⊥ u := by simp [toSimpleGraph, *]
-  use this.toWalk; simp [*, Descend]
-
-@[simp] lemma descend_from_root' {u} (hu : u ≠ ⊥) (hu' : ¬F.IsIsolated (u.unbot hu)) :
-  ∃ p : F.toSimpleGraph.Walk ⊥ u, Descend p := by
-  have : ∀ u, (∀ v, F.parent_child v u → (hv : v ≠ ⊥) → ¬F.IsIsolated (v.unbot hv)
-    → ∃ p : F.toSimpleGraph.Walk ⊥ v, Descend p) → ((hu : u ≠ ⊥) → ¬F.IsIsolated (u.unbot hu)
-    → ∃ p : F.toSimpleGraph.Walk ⊥ u, Descend p) := by
-    intro u h hu hu'; rw [isIsolated_iff_no_parent, not_not] at hu'; obtain ⟨v, hvu⟩ := hu'
-    simp at hvu; specialize h v hvu; by_cases hv : v = ⊥
-    · subst_vars; have : F.IsOrigin (u.unbot hu) := by simp [*]
-      obtain ⟨p, hp⟩ := F.descend_from_rootₒ this; use p.copy rfl (by simp); simp [*]
-    · specialize h hv (by
-        simp [IsIsolated, SimpleGraph.support, toSimpleGraph, -not_and, not_and_or];
-        use u; simp [*])
-      obtain ⟨p, hp⟩ := h
+  have : ∀ u, (∀ v, F.parent_child v u → v ∈ F.support → ∃ p : F.toSimpleGraph.Walk ⊥ v, Descend p)
+    → (u ∈ F.support → ∃ p : F.toSimpleGraph.Walk ⊥ u, Descend p) := by
+    intro u h hu; by_cases hur : u = ⊥
+    · use SimpleGraph.Walk.nil.copy hur rfl; simp [Descend]
+    · obtain ⟨v, hvu⟩ := Or.resolve_left (root_or_has_parent_of_mem_support hu) hur
+      specialize h v hvu (mem_support_of_parent hvu); obtain ⟨p, hp⟩ := h
       set q := (show F.toSimpleGraph.Adj v u from by simp [toSimpleGraph, *]).toWalk
-      have : Descend q := by simp [Descend, q, *]
-      use p.append q; simp [*]
-  exact F.wellfounded.recursion u this hu hu'
-
-@[simp] lemma descend_from_root {u : V} (hu : ¬F.IsIsolated u) :
-  ∃ p : F.toSimpleGraph.Walk ⊥ u, Descend p := by
-  rw [show u = (u : WithBot V).unbot (by simp) from by simp] at hu;
-  exact F.descend_from_root' (show (u : WithBot V) ≠ ⊥ from by simp) hu
+      have : Descend q := (by simp [Descend, q, *]); use p.append q; simp [*]
+  exact F.wellfounded.recursion u this
 
 variable {F : RootedForest V κ} {u v : WithBot V} {p : F.toSimpleGraph.Walk u v} in
 @[simp] lemma not_bot_of_descend (hp : Descend p) : ⊥ ∉ p.support.tail := by
   by_contra; obtain ⟨i, hi, hib⟩ := p.support.tail.mem_iff_getElem.1 ‹_›
-  simp at hi hib; simp [Descend, List.isChain_iff_getElem] at hp
-  have := hib ▸ hp i hi; simp [parent_child_def] at this
+  simp at hi hib; simp [Descend, List.isChain_iff_getElem] at hp; have := hib ▸ hp i hi; aesop
 
 open SimpleGraph Walk List in
 instance instPartialOrderWithBot : PartialOrder (WithBot V) where
@@ -240,12 +176,10 @@ instance instPartialOrderWithBot : PartialOrder (WithBot V) where
         exact Ne.symm <| not_imp_not.2 (fun h => @Set.mem_of_eq_of_mem _ (⊥ : WithBot V) _ _ h
           puu.getLast_support ▸ getLast_tail ‹_› ▸ getLast_mem ‹_›)
           (show ⊥ ∉ puu.support.tail from by simp [*])
-      have : ∀ u, (∀ v, F.parent_child v u → (hv : v ≠ ⊥) → ¬F.IsIsolated (v.unbot hv)
-        → (∃ p : F.toSimpleGraph.Walk v v, ¬p.Nil ∧ Descend p) → False) → ((hu : u ≠ ⊥)
-        → ¬ F.IsIsolated (u.unbot hu) → (∃ p : F.toSimpleGraph.Walk u u, ¬p.Nil ∧ Descend p)
-        → False) := by
-        intro u h hu hu' ⟨puu, hpuu', hpuu⟩;
-        obtain ⟨pru', hpru'⟩ := descend_from_root hu'
+      have : ∀ u, (∀ v, F.parent_child v u → v ≠ ⊥ → v ∈ F.support →
+        (∃ p : F.toSimpleGraph.Walk v v, ¬p.Nil ∧ Descend p) → False) → (u ≠ ⊥ → u ∈ F.support →
+        (∃ p : F.toSimpleGraph.Walk u u, ¬p.Nil ∧ Descend p) → False) := by
+        intro u h hu hu' ⟨puu, hpuu', hpuu⟩; obtain ⟨pru', hpru'⟩ := descend_from_root hu'
         set pru : F.toSimpleGraph.Walk ⊥ u := pru'.copy rfl (by simp)
         have hpru : Descend pru := by simp [*, pru]
         have := not_bot_of_descend hpuu
@@ -275,37 +209,36 @@ instance instPartialOrderWithBot : PartialOrder (WithBot V) where
           ←pru.getVert_eq_support_getElem (by omega : pru.length ≤ pru.length)]
         set v := pru.support[pru.length - 1]; specialize h v hvu
         by_cases hvr : v = ⊥
-        · have := isOrigin_of_has_root_parent' (hvr ▸ hvu)
-          simp [isOrigin_def] at this; have := this.2.2 (v'.unbot ‹_›); simp at this
-          contradiction
-        · have := not_isIsolated_of_parent (show (v.unbot hvr) ≺[F] u from by simp [*])
-          specialize h hvr this
-          by_cases v = v'
+        · have := isOrigin_of_has_root_parent (hvr ▸ hvu)
+          simp [isOrigin_def] at this; have := this.2 v' ‹_›; contradiction
+        · specialize h hvr (mem_support_of_parent hvu); by_cases v = v'
           · set pvv := ((show F.toSimpleGraph.Adj v u from by
               simp_all [toSimpleGraph]).toWalk.append (puu.take (puu.length - 1))).copy rfl
               (show puu.getVert (puu.length - 1) = v from by
                 simp_all [puu.getVert_eq_support_getElem])
             have : ¬pvv.Nil := by simp_all [not_nil_iff_lt_length, pvv]
             have : Descend pvv := by
-              simp only [pvv]; apply descend_copy; apply descend_append
-              · simp [Descend]; assumption
-              · simp [Descend, List.isChain_iff_getElem]
-                intro i hi; set puv' := puu.take (puu.length - 1)
+              simp [pvv, Descend, List.isChain_iff_getElem]; intro i hi
+              set puv' := puu.take (puu.length - 1); match i with
+              | 0 =>
+                simp; rw[←puv'.getVert_eq_support_getElem
+                  (show 0 ≤ puv'.length from by simp [puv'])]; simp; assumption
+              | i' + 1 =>
                 have h1 := puv'.getVert_eq_support_getElem
-                  (show i ≤ puv'.length from by simp [puv']; omega)
+                  (show i' ≤ puv'.length from by simp [puv']; omega)
                 simp [puv'] at h1
-                conv at h1 => left; arg 2; rw[(by omega : min (puu.length - 1) i = i)]
+                conv at h1 => left; arg 2; rw[(by omega : min (puu.length - 1) i' = i')]
                 have h2 := puv'.getVert_eq_support_getElem
-                  (show i + 1 ≤ puv'.length from by simp [puv']; omega)
+                  (show i' + 1 ≤ puv'.length from by simp [puv']; omega)
                 simp [puv'] at h2
-                conv at h2 => left; arg 2; rw[(by omega : min (puu.length - 1) (i + 1) = i + 1)]
-                have h3 := puu.getVert_eq_support_getElem (by omega : i ≤ puu.length)
-                have h4 := puu.getVert_eq_support_getElem (by omega : i + 1 ≤ puu.length)
-                rw [←h1, ←h2, h3, h4]; exact hpuu i (by omega)
+                conv at h2 => left; arg 2; rw[(by omega : min (puu.length - 1) (i' + 1) = i' + 1)]
+                have h3 := puu.getVert_eq_support_getElem (by omega : i' ≤ puu.length)
+                have h4 := puu.getVert_eq_support_getElem (by omega : i' + 1 ≤ puu.length)
+                simp; rw [←h1, ←h2, h3, h4]; exact hpuu i' (by omega)
             exact h ⟨pvv, ‹_›, ‹_›⟩
           · exact F.false_of_not_acyclic hvu hv'u ‹_›
       exact False.elim <| F.wellfounded.recursion u this ‹_›
-        (not_isIsolated_of_walk_not_nil' puu ‹_› ‹_›) ⟨puu, ‹_›, ‹_›⟩
+        (mem_support_of_walk_start_not_nil puu ‹_›) ⟨puu, ‹_›, ‹_›⟩
 
 scoped infix:50 " ≤ " => @ancester_descendant _ _ _
 scoped infix:50 " ≥ " => fun u v => @ancester_descendant _ _ _ v u
