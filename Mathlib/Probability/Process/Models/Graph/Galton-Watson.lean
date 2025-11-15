@@ -401,6 +401,14 @@ end Acyclic
 class Standard (β : List ℕ → ℕ)
   extends RootedForest (List ℕ) (fun v => Fin (β <| match v with | ⊥ => [] | some v => v)) where
   nil_eq_root : (⊥ : WithBot (List ℕ)) = some []
+  branch_def : ∀ v i, branch v i = match v with
+    | ⊥ => [(i : ℕ)]
+    | some v => (i : ℕ) :: v
+
+variable (β : List ℕ → ℕ) in
+instance : FunLike (Standard β) (List ℕ) ℕ where
+  coe _ := β
+  coe_injective' β1 β2 h := by cases β1; cases β2; congr; aesop
 
 end RootedForest
 
@@ -412,25 +420,60 @@ structure ListNProcess (Ω : Type*) [mΩ : MeasurableSpace Ω] (E : Type*) where
 
 namespace ListNProcess
 variable {Ω : Type*} [mΩ : MeasurableSpace Ω] {E : Type*}
-variable (L : ListNProcess Ω ℕ) (ω : Ω)
 
 instance instFunLike : FunLike (ListNProcess Ω E) (List ℕ) (Ω → E) where
   coe := toFun
   coe_injective' f g h := by cases f; cases g; congr
 
+@[simp] def sizeAfterLayer (L : ListNProcess Ω ℕ) (x : List ℕ) (ω : Ω) (n : ℕ) : ℕ :=
+  match n with
+  | 0 => 1
+  | n + 1 =>
+    let M := sizeAfterLayer L x ω n
+    ∑ (f : Fin n → Fin (M + 1)),
+      let seq := List.ofFn fun i => (f i).val;
+      if seq.sum < M then L (seq ++ x) ω else 0
+
+variable (L : ListNProcess Ω ℕ) (x : List ℕ) (ω : Ω) (n : ℕ)
+
+@[simp] lemma sizeAfterLayer_zero : sizeAfterLayer L x ω 0 = 1 := by simp
+
+@[simp] lemma sizeAfterLayer_one : sizeAfterLayer L x ω 1 = L x ω := by simp
+
+@[simp] def sizeBefore (L : ListNProcess Ω ℕ) (x : List ℕ) (ω : Ω) : ℕ :=
+  match x with
+  | [] => 0
+  | m :: x' => m + ∑ n : Fin x'.length, ∑ n' : Fin (x'.get n),
+      sizeAfterLayer L (n' :: (x'.drop (x'.length - n))) ω (x'.length - n + 1)
+
 end ListNProcess
 
-structure GaltonWatsonListN (p : PMF ℕ) (ℙ : MeasureTheory.Measure Ω := by volume_tac) where
+variable (ℙ : MeasureTheory.Measure Ω) (p : PMF ℕ) -- by volume_tac?
+
+class GaltonWatsonListN where
   toProcess : ListNProcess Ω ℕ
+  toField (ω : Ω) := RootedForest.Standard (fun x ↦ toProcess x ω)
   indep : ProbabilityTheory.iIndepFun (fun v ↦ toProcess v) ℙ
   sameLaw : ∀ v, ℙ.map (toProcess v) = p.toMeasure ∨ ℙ.map (toProcess v) = 0
 
-variable (p : PMF ℕ) (ℙ : MeasureTheory.Measure Ω := by volume_tac) in
-structure GaltonWatson (V : Type*) where
-  toProcess : V → Ω → ℕ
-  embeddingListN : V → List ℕ
-  embeddingListN_inj : Function.Injective embeddingListN
-  indep : ProbabilityTheory.iIndepFun (fun v ↦ toProcess v) ℙ
-  sameLaw : ∀ v, ℙ.map (toProcess v) = p.toMeasure ∨ ℙ.map (toProcess v) = 0
+class GaltonWatson (V : Type*) extends GaltonWatsonListN ℙ p where
+  labelling : Ω → List ℕ → WithBot V
+  labelling_inj : ∀ ω, Function.Injective <| labelling ω
 
+class GaltonWatsonNN extends GaltonWatson ℙ p (ℕ × ℕ) where
+  labelling_def : labelling = fun ω x => match x with
+    | [] => ⊥
+    | m :: x' => (x'.length, ListNProcess.sizeBefore toProcess (m :: x') ω)
+
+namespace GaltonWatson
+
+variable {p : PMF ℕ} {ℙ : MeasureTheory.Measure Ω} (GW : GaltonWatson ℙ p V)
+
+def generationSize : ℕ → Ω → ℕ := fun n ω => GW.toProcess.sizeAfterLayer [] ω n
+
+end GaltonWatson
 end GW
+
+section ProbabilityGeneratingFunction
+
+end ProbabilityGeneratingFunction
