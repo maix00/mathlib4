@@ -1,5 +1,7 @@
 import Mathlib.Combinatorics.SimpleGraph.Acyclic
 import Mathlib.Combinatorics.SimpleGraph.Connectivity.Subgraph
+import Mathlib.Probability.Independence.Basic
+import Mathlib.Probability.ProbabilityMassFunction.Basic
 
 variable (V : Type*) (κ : WithBot V → Type*)
 
@@ -23,10 +25,10 @@ attribute [simp] root_no_parent
 section LE
 variable {V : Type*} {κ : WithBot V → Type*} {F : RootedForest V κ}
 
-scoped infix:50 " < " => @parent_child _ _ _
-scoped notation:50 a " <[" F:50 "] " b => @parent_child _ _ (F : RootedForest _ ‹_›) a b
+scoped infix:50 " ≺ " => @parent_child _ _ _
+scoped notation:50 a " ≺[" F:50 "] " b => @parent_child _ _ (F : RootedForest _ ‹_›) a b
 
-@[simp] lemma false_of_not_acyclic {u v v'} (huv : v <[F] u) (huv' : v' <[F] u) (hvv' : v ≠ v') :
+@[simp] lemma false_of_not_acyclic {u v v'} (huv : v ≺[F] u) (huv' : v' ≺[F] u) (hvv' : v ≠ v') :
   False := by exact hvv' <| F.acyclic huv huv'
 
 @[simp] lemma root_branch_nonempty_of_has_isOrigin {u} (hu : F.IsOrigin u) : Nonempty (κ ⊥) := by
@@ -75,26 +77,26 @@ lemma isOrigin_of_has_root_parent {u} (hu : F.parent_child ⊥ u) : F.IsOrigin u
 instance instLT : LT V where
   lt u v := @parent_child _ _ F (u : WithBot V) (v : WithBot V)
 
-scoped notation:50 a " ᵖ< " b => @LT.lt _ (instLT _) a b
-scoped notation:50 a " ᵖ<[" F:50 "] " b => @LT.lt _ (instLT (F : RootedForest _ ‹_›)) a b
+scoped notation:50 a " ᵖ≺ " b => @LT.lt _ (instLT _) a b
+scoped notation:50 a " ᵖ≺[" F:50 "] " b => @LT.lt _ (instLT (F : RootedForest _ ‹_›)) a b
 
 def toSimpleGraph : SimpleGraph (WithBot V) where
-  Adj u v := (u <[F] v) ∨ (v <[F] u)
+  Adj u v := (u ≺[F] v) ∨ (v ≺[F] u)
   loopless u := by simp [loopless]
 
 def support := F.toSimpleGraph.support
 
-lemma root_or_has_parent_of_mem_support {u} : u ∈ F.support → u = ⊥ ∨ ∃ v, v <[F] u := by
+lemma root_or_has_parent_of_mem_support {u} : u ∈ F.support → u = ⊥ ∨ ∃ v, v ≺[F] u := by
   intro ⟨v, huv⟩; simp [toSimpleGraph] at huv; by_cases u = ⊥
   · left; assumption
   · right; by_cases hu : F.IsOrigin u
     · use ⊥; simp [*]
     · simp only [isOrigin_def, not_and_or] at hu; cases hu <;> aesop
 
-lemma mem_support_of_parent {u v} (_ : u <[F] v) : u ∈ F.support := by
+lemma mem_support_of_parent {u v} (_ : u ≺[F] v) : u ∈ F.support := by
   simp_all [support, toSimpleGraph, SimpleGraph.support]; use v; left; assumption
 
-lemma mem_support_of_child {u v} (_ : u <[F] v) : v ∈ F.support := by
+lemma mem_support_of_child {u v} (_ : u ≺[F] v) : v ∈ F.support := by
   simp_all [support, toSimpleGraph, SimpleGraph.support]; use u; right; assumption
 
 open SimpleGraph Walk in
@@ -234,16 +236,16 @@ instance instPartialOrderWithBot : PartialOrder (WithBot V) where
       exact False.elim <| F.wellfounded.recursion u this ‹_›
         (mem_support_of_walk_start_not_nil puu ‹_›) ⟨puu, ‹_›, ‹_›⟩
 
-scoped infix:50 " ≤ " => @ancester_descendant _ _ _
-scoped infix:50 " ≥ " => fun u v => @ancester_descendant _ _ _ v u
-scoped notation:50 a " ≤[" F:50 "] " b => @ancester_descendant _ _ (F : RootedForest _ ‹_›) a b
-scoped notation:50 a " ≥[" F:50 "] " b => @ancester_descendant _ _ (F : RootedForest _ ‹_›) b a
+scoped infix:50 " ≼ " => @ancester_descendant _ _ _
+scoped infix:50 " ≽ " => fun u v => @ancester_descendant _ _ _ v u
+scoped notation:50 a " ≼[" F:50 "] " b => @ancester_descendant _ _ (F : RootedForest _ ‹_›) a b
+scoped notation:50 a " ≽[" F:50 "] " b => @ancester_descendant _ _ (F : RootedForest _ ‹_›) b a
 
 @[simp] lemma toAncesterDescendant : Subrelation F.parent_child F.ancester_descendant := by
   simp [Subrelation, ancester_descendant]; intro u v _
   use (show F.toSimpleGraph.Adj u v from by simp [toSimpleGraph, *]).toWalk; simp [Descend, *]
 
-@[simp] lemma parent_child_not_commu {u v} (huv : u <[F] v) : ¬v <[F] u := by
+@[simp] lemma parent_child_not_commu {u v} (huv : u ≺[F] v) : ¬v ≺[F] u := by
   by_contra hvu; have := F.instPartialOrderWithBot.le_antisymm u v (F.toAncesterDescendant huv)
     (F.toAncesterDescendant hvu); subst_vars; exact F.loopless v huv
 
@@ -267,7 +269,7 @@ lemma isAcyclic : F.toSimpleGraph.IsAcyclic := by
       · subst_vars; simp [take_support_eq_support_take_succ]
       · have : i = 1 := (by omega); subst_vars; simp [take_support_eq_support_take_succ]
   have h₀ {u} (c : F.toSimpleGraph.Walk u u) (hc : c.IsCycle)
-    (hc' : u <[F] c.getVert 1) : False := by
+    (hc' : u ≺[F] c.getVert 1) : False := by
     have h0 := hc.three_le_length
     have : ∃ i < c.length, Descend (c.take i) ∧ ¬ Descend (c.take (i + 1)) := by
       by_contra h; simp only [not_exists, not_and_or, not_not] at h
@@ -292,13 +294,13 @@ lemma isAcyclic : F.toSimpleGraph.IsAcyclic := by
           simp [Descend, List.isChain_iff_getElem, this] at ⊢ h1
           intro i _; conv => arg 2; arg 2; rw[(by omega : i = 0)]
           specialize h1 0 (by omega); simpa
-        have : u ≤[F] c.getVert 1 := by simp [ancester_descendant]; use (c.take 1)
+        have : u ≼[F] c.getVert 1 := by simp [ancester_descendant]; use (c.take 1)
         have : Descend (c.drop 1) := by
           simp [Descend, List.isChain_iff_getElem, drop_support_eq_support_drop_min] at ⊢ h1
           intro i hi; conv => arg 2; arg 2; simp [(by omega : min 1 c.length + i = i + 1)]
           conv => arg 3; arg 2; simp [(by omega : min 1 c.length + (i + 1) = i + 2)]
           exact h1 (i + 1) (by omega)
-        have : c.getVert 1 ≤[F] u := by simp [ancester_descendant]; use (c.drop 1)
+        have : c.getVert 1 ≼[F] u := by simp [ancester_descendant]; use (c.drop 1)
         exact F.instPartialOrderWithBot.le_antisymm (c.getVert 1) u ‹_› ‹_›
       contradiction
     obtain ⟨i, hi1, hi2, hi3⟩ := this
@@ -332,7 +334,7 @@ lemma isAcyclic : F.toSimpleGraph.IsAcyclic := by
     · specialize hc (i - 2) i (by omega) (by omega) (by omega)
       simp [(by omega : i - 2 + 1 = i - 1), ←@getVert_eq_support_getElem _ _ _ _ (i - 1) c
         (by omega), ←@getVert_eq_support_getElem _ _ _ _ (i + 1) c (by omega), this] at hc
-  by_cases hc' : u <[F] c.getVert 1
+  by_cases hc' : u ≺[F] c.getVert 1
   · exact h₀ c hc hc'
   · set c' := ((c.drop 1).append (c.take 1)).reverse
     have : c'.length = c.length := by simp [c']; omega
@@ -388,29 +390,47 @@ lemma isAcyclic : F.toSimpleGraph.IsAcyclic := by
           simp [←@getVert_eq_support_getElem _ _ _ _ (c.length - (i + 1) + 1) c (by omega),
             ←@getVert_eq_support_getElem _ _ _ _ (c.length - (j + 1) + 1) c (by omega)] at hc
           exact Ne.symm hc
-    have : c.getVert 1 <[F] c'.getVert 1 := by
-      have : c.getVert 1 <[F] u := by
+    have : c.getVert 1 ≺[F] c'.getVert 1 := by
+      have : c.getVert 1 ≺[F] u := by
         have := c.adj_getVert_succ (by omega : 0 < c.length); simp [toSimpleGraph] at this; aesop
       exact Eq.symm h9 ▸ this
     exact h₀ c' ‹_› ‹_›
 
 end Acyclic
 
--- class Standard extends RootedForest V κ where
---   branch_bij v : Set.BijOn (branch v) Set.univ { u | ∃ j, branch v j = u }
---   branch_inv' (v : V) [Nonempty (κ v)] : V → κ v
---   branch_inv (v : V) [Nonempty (κ v)] :
---     branch_inv' v = @Function.invFunOn _ _ _ (branch v) Set.univ
---   branch_inv_on (v : V) [Nonempty (κ v)] :
---     Set.InvOn (branch_inv' v) (branch v) Set.univ { u | ∃ j, branch v j = u } := ⟨by
---       simp [Set.LeftInvOn]; intro x; simp [branch_inv v]
---       exact (branch_bij v).injOn (Set.mem_univ _) (Set.mem_univ x)
---         <| @Function.invFunOn_apply_eq _ _ _ (branch v) x _ (Set.mem_univ x), by
---       simp [Set.RightInvOn]; intro u hu; simp [branch_inv v]
---       exact @Function.invFunOn_eq _ _ _ (branch v) u _ <| (by
---         have := (branch_bij v).surjOn; simp [Set.SurjOn] at this; simp
---         exact Set.mem_range.1 <| Set.mem_of_subset_of_mem this hu)⟩
---   branch_inv_bij (v : V) [Nonempty (κ v)]
---     := (@Set.bijOn_comm _ _ _ _ (branch_inv' v) _ (branch_inv_on v)).mpr (branch_bij v)
+class Standard (β : List ℕ → ℕ)
+  extends RootedForest (List ℕ) (fun v => Fin (β <| match v with | ⊥ => [] | some v => v)) where
+  nil_eq_root : (⊥ : WithBot (List ℕ)) = some []
 
 end RootedForest
+
+section GW
+variable {Ω : Type*} [mΩ : MeasurableSpace Ω]
+
+structure ListNProcess (Ω : Type*) [mΩ : MeasurableSpace Ω] (E : Type*) where
+  toFun : List ℕ → Ω → E
+
+namespace ListNProcess
+variable {Ω : Type*} [mΩ : MeasurableSpace Ω] {E : Type*}
+variable (L : ListNProcess Ω ℕ) (ω : Ω)
+
+instance instFunLike : FunLike (ListNProcess Ω E) (List ℕ) (Ω → E) where
+  coe := toFun
+  coe_injective' f g h := by cases f; cases g; congr
+
+end ListNProcess
+
+structure GaltonWatsonListN (p : PMF ℕ) (ℙ : MeasureTheory.Measure Ω := by volume_tac) where
+  toProcess : ListNProcess Ω ℕ
+  indep : ProbabilityTheory.iIndepFun (fun v ↦ toProcess v) ℙ
+  sameLaw : ∀ v, ℙ.map (toProcess v) = p.toMeasure ∨ ℙ.map (toProcess v) = 0
+
+variable (p : PMF ℕ) (ℙ : MeasureTheory.Measure Ω := by volume_tac) in
+structure GaltonWatson (V : Type*) where
+  toProcess : V → Ω → ℕ
+  embeddingListN : V → List ℕ
+  embeddingListN_inj : Function.Injective embeddingListN
+  indep : ProbabilityTheory.iIndepFun (fun v ↦ toProcess v) ℙ
+  sameLaw : ∀ v, ℙ.map (toProcess v) = p.toMeasure ∨ ℙ.map (toProcess v) = 0
+
+end GW
