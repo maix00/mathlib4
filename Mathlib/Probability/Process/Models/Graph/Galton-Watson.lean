@@ -424,6 +424,18 @@ instance : Membership (List ℕ) RootedLabeledTree where
 instance : HasSubset RootedLabeledTree where
   Subset T1 T2 := T1.val ⊆ T2.val
 
+@[simp] lemma nil_generate : generateRootedLabeledTree ∅ = ∅ := by
+  ext l; simp only [Set.mem_empty_iff_false, iff_false]; by_contra hl
+  induction hl with
+  | mem _ ih => exact ih
+  | tail _ _ _ ih => exact ih
+  | less _ _ _ _ _ ih => exact ih
+
+@[simp] lemma generateRootedLabeledTree_eq_self_of_val (T : RootedLabeledTree) :
+  generateRootedLabeledTree T.val = T.val := T.property.1
+
+@[simp] lemma nonempty_of_val (T : RootedLabeledTree) : T.val ≠ ∅ := T.property.2
+
 lemma generate_subset_generate_of_subset (s1 s2 : Set (List ℕ)) (h : s1 ⊆ s2) :
   generateRootedLabeledTree s1 ⊆ generateRootedLabeledTree s2 := by
   unfold Subset Set.instHasSubset LE.le Set.instLE Set.Subset; simp; intro l hl; induction hl with
@@ -443,7 +455,7 @@ lemma subset_generate (s : Set (List ℕ)) : s ⊆ generateRootedLabeledTree s :
   simp [Membership.mem, Set.Mem] at hl ⊢
   exact generateRootedLabeledTree.mem l hl
 
-lemma double_generate (s : Set (List ℕ)) :
+lemma generate_generate (s : Set (List ℕ)) :
   generateRootedLabeledTree (generateRootedLabeledTree s) = generateRootedLabeledTree s := by
   ext l; constructor
   · intro hl; induction hl with
@@ -459,7 +471,10 @@ lemma nonempty_of_nonempty (s : Set (List ℕ)) (hs : s ≠ ∅) : generateRoote
   exact ⟨l, generateRootedLabeledTree.mem l hl⟩
 
 def generate (s : Set (List ℕ)) (hs : s ≠ ∅) : RootedLabeledTree :=
-  ⟨generateRootedLabeledTree s, double_generate s, nonempty_of_nonempty s hs⟩
+  ⟨generateRootedLabeledTree s, generate_generate s, nonempty_of_nonempty s hs⟩
+
+@[simp] lemma self_eq_generate_val (T : RootedLabeledTree) :
+  generate T.val T.nonempty_of_val = T := by simp [generate]
 
 @[simp] lemma nil_mem {T : RootedLabeledTree} : [] ∈ T := by
   obtain ⟨h1, h2⟩ := T.property; obtain ⟨l, hl⟩ := Set.nonempty_iff_ne_empty.2 h2
@@ -467,7 +482,7 @@ def generate (s : Set (List ℕ)) (hs : s ≠ ∅) : RootedLabeledTree :=
   | nil => exact hl
   | cons m l' ih =>
     rw [←h1] at hl ih; simp [Membership.mem, Set.Mem] at hl ih ⊢
-    exact ih <| generateRootedLabeledTree.tail m l' hl
+    have := h1 ▸ generateRootedLabeledTree.tail m l' (h1 ▸ hl); exact ih this
 
 @[simp] lemma tail_mem {T : RootedLabeledTree} {m : ℕ} {l : List ℕ} {h : m :: l ∈ T} : l ∈ T := by
   obtain ⟨h1, h2⟩ := T.property; simp [Membership.mem, Set.Mem] at ⊢ h; rw [←h1] at ⊢ h
@@ -477,6 +492,12 @@ def generate (s : Set (List ℕ)) (hs : s ≠ ∅) : RootedLabeledTree :=
   cases l with
   | nil => simp
   | cons m l' => simp [@tail_mem T m l' h]
+
+@[simp] lemma drop_mem {T : RootedLabeledTree} {l : List ℕ} {h : l ∈ T} {n : ℕ} : l.drop n ∈ T := by
+  induction n with
+  | zero => simpa
+  | succ n ih =>
+    simp only [←@List.drop_drop _ 1 n l, List.drop_one]; exact @tail_mem' T (l.drop n) ih
 
 @[simp] lemma less_mem {T : RootedLabeledTree} {m n : ℕ} {l : List ℕ}
   {h : m :: l ∈ T} {hnm : n ≤ m} : n :: l ∈ T := by
@@ -887,17 +908,20 @@ instance : CompleteSpace RootedLabeledTree where
       by_cases h : n = 0
       · simp [h, E]
       · have : E n = uniformityBasis (n - 1) := by
-          simp [uniformityBasis, E]; conv => right; rw [(show n - 1 + 1 = n from by omega)]
+          simp only [uniformityBasis, E]; conv => right; rw [(show n - 1 + 1 = n from by omega)]
         exact (Filter.HasBasis.mem_iff instUniformityBasis).2 (by use (n - 1); simp [this])
     have (n : ℕ) : ∃ Sn ∈ f, Sn.Nonempty ∧ Sn ×ˢ Sn ⊆ E n := by
-      simp [LE.le] at hf'; have hf'2 := @hf'.2 (E n) (memE n)
-      obtain ⟨Sn, hSmem, _⟩ := Filter.mem_prod_same_iff.1 hf'2; use Sn; simp [*]; by_contra h
+      simp only [LE.le] at hf'; have hf'2 := @hf'.2 (E n) (memE n)
+      obtain ⟨Sn, hSmem, _⟩ := Filter.mem_prod_same_iff.1 hf'2; use Sn
+      simp only [and_true, true_and, *]; by_contra h
       exact (not_imp_not.2 Filter.empty_mem_iff_bot.1 <| Filter.neBot_iff.1 hf'.1)
         <| (Set.not_nonempty_iff_eq_empty.1 h) ▸ hSmem
     choose S hSmem hSne hSsub using this
     have hSsub' (n : ℕ) (T1 T2) : T1 ∈ S n → T2 ∈ S n → T1.truncation n = T2.truncation n := by
-      intro h1 h2; have : (T1, T2) ∈ (S n) ×ˢ (S n) := by simp [*]
-      have := Set.mem_of_subset_of_mem (hSsub n) this; simp [E] at this; exact this
+      intro h1 h2; have : (T1, T2) ∈ (S n) ×ˢ (S n) := by
+        simp only [Set.mem_prod, and_self, h1, h2]
+      have := Set.mem_of_subset_of_mem (hSsub n) this;
+      simp only [Set.mem_setOf_eq, E] at this; exact this
     choose T' hT'mem using hSne
     have hT'tr (n m : ℕ) : (T' (n + m)).truncation n = (T' n).truncation n := by
       obtain ⟨U, hU⟩ : (S (n + m) ∩ S n).Nonempty := by
@@ -911,22 +935,23 @@ instance : CompleteSpace RootedLabeledTree where
     set T : RootedLabeledTree := ⟨Tval, by
       ext l; constructor
       · intro hl; induction hl with
-        | mem l' hl' => simp [Membership.mem, Set.Mem, *]
+        | mem l' hl' => simp only [Membership.mem, Set.Mem, hl']
         | tail m l' hl' ih =>
           have ih := @tail_mem ((T' (l'.length + 1)).truncation (l'.length + 1)) m l' ih
-          simp [Tval, Membership.mem, Set.Mem] at ⊢ ih; rw [←hT'tr l'.length 1]
+          simp only [Membership.mem, Set.Mem, ne_eq, Tval] at ⊢ ih; rw [←hT'tr l'.length 1]
           exact @mem_truncation_of_mem_other_truncation _
             l'.length (l'.length + 1) l' (by omega) ih
         | less m l' hl' n hnm ih =>
           exact @less_mem ((T' (l'.length + 1)).truncation (l'.length + 1)) m n l' ih hnm
       · exact generateRootedLabeledTree.mem l
       , Set.nonempty_iff_ne_empty.1 ⟨[], by
-        have : ([] : List ℕ) ∈ ({[]} : Set (List ℕ)) := by simp
+        have : ([] : List ℕ) ∈ ({[]} : Set (List ℕ)) := by simp only [Set.mem_singleton_iff]
         simp [Tval, Membership.mem, Set.Mem] at ⊢ this; exact this⟩⟩
     use T; have := @nhds_basis_uniformity _ _ _ _ _ instUniformityBasis T
-    simp [uniformityBasis] at this; refine (this.ge_iff.mpr ?_); simp
+    simp only [uniformityBasis, Set.mem_setOf_eq] at this
+    refine (this.ge_iff.mpr ?_); simp only [forall_const]
     have hTtr (n : ℕ) : T.truncation n = (T' n).truncation n := by
-      simp [T, Tval, truncation]; apply Subtype.coe_inj.1; ext l;
+      simp only [truncation, ne_eq, T, Tval]; apply Subtype.coe_inj.1; ext l;
       simp [Membership.mem, Set.Mem, setOf]; intro hl
       have := (show l.length + (n - l.length) = n from by omega) ▸ hT'tr l.length (n - l.length)
       constructor
@@ -935,10 +960,134 @@ instance : CompleteSpace RootedLabeledTree where
       · intro hl'; exact @mem_of_mem_truncation _ l.length _
           (Eq.symm this ▸ mem_truncation_of_mem (by omega) hl')
     intro n; exact f.sets_of_superset (hSmem (n + 1)) (by
-      simp [Set.subset_def]; intro U hU; rw [hTtr (n + 1)]
+      simp only [Set.subset_def, Set.mem_setOf_eq]; intro U hU; rw [hTtr (n + 1)]
       exact hSsub' (n + 1) U (T' (n + 1)) hU (hT'mem (n + 1)))
 
-def LocallyFinite := {T : RootedLabeledTree // ∀ n, Set.Finite (T.truncation n).val}
+private def generate_tail_of_single (l : List ℕ) : Set (List ℕ) :=
+  ⋃ (n : Fin (l.length + 1)), {l.drop n}
+
+@[simp] private lemma finite_generate_tail_of_single (l : List ℕ) :
+  (generate_tail_of_single l).Finite := by
+  simp only [generate_tail_of_single]; apply Set.finite_iUnion; simp
+
+@[simp] private lemma mem_self_generate_tail_of_single (l : List ℕ) :
+  l ∈ generate_tail_of_single l := by simp [generate_tail_of_single]; use 0; simp
+
+private def generate_tail (s : Set (List ℕ)) : Set (List ℕ) := ⋃ l : ↑s, generate_tail_of_single l
+
+@[simp] private lemma finite_generate_tail_of_finite (s : Set (List ℕ)) (hs : s.Finite) :
+  (generate_tail s).Finite := by
+  simp only [generate_tail]
+  apply fun h => @Set.finite_iUnion _ _ (Set.finite_coe_iff.2 hs) _ h; simp
+
+@[simp] private lemma mem_self_generate_tail (l : List ℕ) (s : Set (List ℕ)) (h : l ∈ ↑s) :
+  l ∈ generate_tail s := by simp [generate_tail]; use l; simp [*]
+
+@[simp] private lemma tail_mem_of_mem_generate_tail (m : ℕ) (l : List ℕ) (s : Set (List ℕ))
+  (h : m :: l ∈ generate_tail s) : l ∈ generate_tail s := by
+  simp [generate_tail] at h ⊢; obtain ⟨l', hl'1, hl'2⟩ := h
+  simp [generate_tail_of_single] at hl'2 ⊢; obtain ⟨⟨n, hn⟩, hl'2⟩ := hl'2; simp at hl'2
+  by_cases hl'3 : n = l'.length
+  · simp [hl'3] at hl'2
+  · use l'; simp [*]; use ⟨n + 1, by omega⟩; simp only [← @List.drop_drop _ 1 n l', hl'2,
+    List.drop_succ_cons, List.drop_zero]
+
+private def generate_less_of_single (l : List ℕ) (hl : l ≠ []) : Set (List ℕ) :=
+  ⋃ (n : Fin (l.head hl + 1)), {(n : ℕ) :: l.tail}
+
+@[simp] private lemma finite_generate_less_of_single (l : List ℕ) (hl : l ≠ []) :
+  (generate_less_of_single l hl).Finite := by
+  simp only [generate_less_of_single]; apply Set.finite_iUnion; simp
+
+@[simp] private lemma mem_self_generate_less_of_single (l : List ℕ) (hl : l ≠ []) :
+  l ∈ generate_less_of_single l hl := by
+  simp [generate_less_of_single]; use ⟨l.head hl, by omega⟩; simp
+
+private def generate_less (s : Set (List ℕ)) (hs : [] ∉ s) :=
+  ⋃ l : ↑s, generate_less_of_single l (by aesop)
+
+@[simp] private lemma finite_generate_less (s : Set (List ℕ)) (hs : [] ∉ s) (hs' : s.Finite) :
+  (generate_less s hs).Finite := by
+  simp only [generate_less]
+  apply fun h => @Set.finite_iUnion _ _ (Set.finite_coe_iff.2 hs') _ h; simp
+
+@[simp] private lemma mem_self_generate_less (l : List ℕ) (s : Set (List ℕ)) (hs : [] ∉ s)
+  (hl' : l ∈ ↑s) : l ∈ generate_less s hs := by simp [generate_less]; use l, hl'; simp
+
+@[simp] private lemma cons_mem_of_mem_generate_less (s : Set (List ℕ)) (hs : [] ∉ s) (m : ℕ)
+  (l : List ℕ) (hl : m :: l ∈ generate_less s hs) : ∃ n, m ≤ n ∧ n :: l ∈ s := by
+  simp [generate_less] at hl; obtain ⟨l', hl'1, hl'2⟩ := hl
+  simp [generate_less_of_single] at hl'2; obtain ⟨⟨⟨m', hm'⟩, hl'2⟩, hl'3⟩ := hl'2
+  cases l' with
+  | nil => exact False.elim <| hs hl'1
+  | cons n l' =>
+    use n; simp_all only [List.tail_cons]; simp only [List.head_cons] at hm'; subst_vars
+    exact ⟨by omega, hl'1⟩
+
+@[simp] private lemma less_mem_of_mem_generate_less (s : Set (List ℕ)) (hs : [] ∉ s) (n m : ℕ)
+  (hmn : n ≤ m) (l : List ℕ) (hl : m :: l ∈ generate_less s hs) : n :: l ∈ generate_less s hs := by
+  obtain ⟨n', hmn', hl'⟩ := cons_mem_of_mem_generate_less s hs m l hl
+  simp [generate_less]; use n' :: l, hl'; simp [generate_less_of_single]; use ⟨n, by omega⟩
+
+private lemma generate_eq_generate_tail_then_less (s : Set (List ℕ)) (hs : s ≠ ∅) :
+  generateRootedLabeledTree s = {[]} ∪ generate_less (generate_tail s \ {[]}) (by simp) := by
+  ext l; simp only [Set.singleton_union, Set.mem_insert_iff]; constructor
+  · intro hl; by_cases hl'1 : l = []
+    · left; exact hl'1
+    · right; induction hl with
+      | mem l' hl'2 =>
+        exact mem_self_generate_less l' _ _ (by simp [*]; exact mem_self_generate_tail l' s hl'2)
+      | tail m l' hl'2 ih =>
+        simp only [reduceCtorEq, not_false_eq_true, forall_const] at ih
+        obtain ⟨n, hmn, ih⟩ := cons_mem_of_mem_generate_less _ _ m l' ih
+        simp only [generate_less, Set.iUnion_coe_set, Set.mem_diff, Set.mem_singleton_iff,
+          Set.mem_iUnion]; use l'
+        simp only [Set.mem_diff, Set.mem_singleton_iff, reduceCtorEq, not_false_eq_true,
+          and_true] at ih; use ⟨tail_mem_of_mem_generate_tail n l' s ih, hl'1⟩
+        exact mem_self_generate_less_of_single l' hl'1
+      | less m l' hl'2 n hnm ih =>
+        simp only [reduceCtorEq, not_false_eq_true, forall_const] at ih
+        exact less_mem_of_mem_generate_less _ _ n m hnm l' ih
+  · intro hl; by_cases hl'1 : l = []
+    · have := hl'1 ▸ @nil_mem (generate s hs); simp only [generate, instMembershipListNat] at this
+      exact this
+    · simp [hl'1, generate_less] at hl; obtain ⟨l', ⟨hl'2, hl'3⟩, hl'4⟩ := hl
+      simp [generate_tail] at hl'2; obtain ⟨l'', hl'2, hl'5⟩ := hl'2
+      simp [generate_tail_of_single] at hl'5; obtain ⟨⟨n, hn⟩, hl'5⟩ := hl'5; simp only at hl'5
+      simp [generate_less_of_single] at hl'4; obtain ⟨⟨m, hm⟩, hl'4⟩ := hl'4; simp only at hl'4
+      simp only [Membership.mem, Set.Mem] at hl'2
+      have := List.cons_head_tail hl'3 ▸ hl'5 ▸
+        @drop_mem (generate s hs) l'' (generateRootedLabeledTree.mem l'' hl'2) n
+      exact hl'4 ▸ @less_mem (generate s hs) (l'.head hl'3) m l'.tail this (by omega)
+
+@[simp] lemma finite_of_generateRootedLabeledTree_finite {s : Set (List ℕ)} (hs : s.Finite) :
+  Set.Finite (generateRootedLabeledTree s) := by
+  by_cases s = ∅
+  · simp [nil_generate, *]
+  · simp only [generate_eq_generate_tail_then_less s ‹_›, Set.singleton_union, Set.finite_insert]
+    exact finite_generate_less _ (by aesop)
+      <| @Finite.Set.finite_diff _ _ {[]} <| finite_generate_tail_of_finite s hs
+
+@[simp] lemma finite_of_generate_finite {s : Set (List ℕ)} (hs : s ≠ ∅) (hs' : s.Finite) :
+  Set.Finite (generate s hs).val := by
+  simp [generate, finite_of_generateRootedLabeledTree_finite hs']
+
+@[simp] lemma finite_truncation_of_finite {T : RootedLabeledTree} (hT : Set.Finite T.val) (n : ℕ) :
+  Set.Finite (T.truncation n).val := by
+  have := @truncation_subset T n; simp only [instHasSubset] at this
+  have : (T.val \ (T.val \ (T.truncation n).val)) = (T.truncation n).val := by simp [*]
+  exact this ▸ @Finite.Set.finite_diff _ T.val (T.val \ (T.truncation n).val) hT
+
+def IsLocallyFinite (T : RootedLabeledTree) := ∀ n, Set.Finite (T.truncation n).val
+
+def LocallyFinite := {T : RootedLabeledTree // T.IsLocallyFinite}
+
+lemma isLocallyFinite_of_truncation {T : RootedLabeledTree} (hT : T.IsLocallyFinite) (n : ℕ) :
+  IsLocallyFinite (T.truncation n) := by simp [IsLocallyFinite] at ⊢ hT; intro m; exact hT (min n m)
+
+def LocallyFinite.generateFinite (s : Set (List ℕ)) (hs : s ≠ ∅) (hs' : s.Finite) : LocallyFinite :=
+  ⟨generate s hs, by
+    simp [IsLocallyFinite]; exact finite_truncation_of_finite <| finite_of_generate_finite hs hs'⟩
 
 namespace LocallyFinite
 
@@ -947,7 +1096,150 @@ noncomputable instance : MetricSpace LocallyFinite := Subtype.metricSpace
 instance : IsUltrametricDist LocallyFinite where
   dist_triangle_max T1 T2 T3 := treeDist_ultra T1.val T2.val T3.val
 
+instance : Coe LocallyFinite (Set (List ℕ)) where
+  coe T := T.val
 
+instance : Membership (List ℕ) LocallyFinite where
+  mem T l := l ∈ T.val
+
+instance : HasSubset LocallyFinite where
+  Subset T1 T2 := T1.val ⊆ T2.val
+
+@[simp] def truncation (T : LocallyFinite) (n : ℕ) : LocallyFinite :=
+  ⟨T.val.truncation n, isLocallyFinite_of_truncation T.property n⟩
+
+private instance instUniformityBasis' : (uniformity LocallyFinite).HasBasis
+  (fun _ => True) (fun (n : ℕ) => {p | edist p.1 p.2 < (1 + (n : ENNReal))⁻¹}) :=
+  EMetric.mk_uniformity_basis (by simp) (by
+    simp; intro ε hε; obtain ⟨n, hn⟩ := ENNReal.exists_inv_nat_lt (ne_of_gt hε); use n
+    simp [ENNReal.inv_lt_iff_inv_lt] at hn; simp [ENNReal.inv_le_iff_inv_le]
+    exact le_of_lt <| lt_trans hn (by apply ENNReal.coe_lt_coe.2; simp))
+
+def uniformityBasis := fun n =>
+  {p : LocallyFinite × LocallyFinite | p.1.truncation (n + 1) = p.2.truncation (n + 1)}
+
+private lemma uniformityBasis_eq_aux : (fun (n : ℕ) => {p | edist p.1 p.2 < (1 + (n : ENNReal))⁻¹})
+  = uniformityBasis := by
+  ext n p; simp [uniformityBasis, edist, PseudoMetricSpace.edist, treeDist]; constructor
+  · intro h; have h := (ENNReal.toReal_lt_toReal (by simp) (by simp)).2 h
+    simp [-ENNReal.toReal_inv, ←ENNReal.toReal_inv] at h
+    have h := (ENNReal.add_lt_add_iff_left (by simp)).1 h
+    rw [show (n : ENNReal) = ((n : ENat) : ENNReal) from by simp] at h
+    simp [-ENat.toENNReal_coe] at h; apply Subtype.coe_inj.1; simp
+    exact heightCongr_apply _ <| (ENat.add_one_le_iff (by simp)).2 h
+  · intro h; have h := Subtype.coe_inj.2 h; simp at h
+    have := (heightCongr_apply_iff _).2 h
+    set m := heightCongr p.1.val p.2.val with hm
+    conv => left; congr; congr; congr; congr; right; congr; rw [←hm]
+    apply (ENNReal.toReal_lt_toReal (by simp) (by simp)).1
+    simp [-ENNReal.toReal_inv, ←ENNReal.toReal_inv]
+    by_cases h' : m = ⊤
+    · simp [h']
+    · have := (ENat.lt_add_one_iff h').2 this
+      have := ENat.toENNReal_lt.2 this; simp at this
+      conv => lhs; rw [add_comm]
+      conv => rhs; rw [add_comm]
+      exact this
+
+instance instUniformityBasis : (uniformity LocallyFinite).HasBasis
+  (fun _ => True) uniformityBasis := uniformityBasis_eq_aux ▸ instUniformityBasis'
+
+instance : CompleteSpace LocallyFinite where
+  complete := by
+    intro f hf; have hf' := (by simpa [Cauchy] using hf)
+    let E (n : ℕ) := {p : LocallyFinite × LocallyFinite |
+      (p.1.val).truncation n = (p.2.val).truncation n}
+    have memE (n : ℕ): E n ∈ uniformity LocallyFinite := by
+      by_cases h : n = 0
+      · simp [h, E]
+      · have : E n = uniformityBasis (n - 1) := by
+          simp only [uniformityBasis, truncation, E]
+          conv => right; congr; ext p; rw [(show n - 1 + 1 = n from by omega), ←Subtype.coe_inj]
+        exact (Filter.HasBasis.mem_iff instUniformityBasis).2 (by
+          use (n - 1); simp only [this, subset_refl, and_self])
+    have (n : ℕ) : ∃ Sn ∈ f, Sn.Nonempty ∧ Sn ×ˢ Sn ⊆ E n := by
+      simp only [LE.le] at hf'; have hf'2 := @hf'.2 (E n) (memE n)
+      obtain ⟨Sn, hSmem, _⟩ := Filter.mem_prod_same_iff.1 hf'2; use Sn
+      simp only [and_true, true_and, *]; by_contra h
+      exact (not_imp_not.2 Filter.empty_mem_iff_bot.1 <| Filter.neBot_iff.1 hf'.1)
+        <| (Set.not_nonempty_iff_eq_empty.1 h) ▸ hSmem
+    choose S hSmem hSne hSsub using this
+    have hSsub' (n : ℕ) (T1 T2) : T1 ∈ S n → T2 ∈ S n → T1.truncation n = T2.truncation n := by
+      intro h1 h2; have : (T1, T2) ∈ (S n) ×ˢ (S n) := by
+        simp only [Set.mem_prod, and_self, h1, h2]
+      have := Set.mem_of_subset_of_mem (hSsub n) this; simp only [Set.mem_setOf_eq, E] at this
+      apply Subtype.coe_inj.1; exact this
+    choose T' hT'mem using hSne
+    have hT'tr (n m : ℕ) : (T' (n + m)).truncation n = (T' n).truncation n := by
+      obtain ⟨U, hU⟩ : (S (n + m) ∩ S n).Nonempty := by
+        by_contra h; exact (not_imp_not.2 Filter.empty_mem_iff_bot.1 <| Filter.neBot_iff.1 hf'.1)
+          <| (Set.not_nonempty_iff_eq_empty.1 h) ▸ f.inter_mem (hSmem (n + m)) (hSmem n)
+      have h1 := hSsub' (n + m) U (T' (n + m)) ((Set.mem_inter_iff _ _ _).1 hU).1 (hT'mem (n + m))
+      have h2 := hSsub' n U (T' n) ((Set.mem_inter_iff _ _ _).1 hU).2 (hT'mem n)
+      have h1 := congrArg (fun T => T.truncation n) h1; simp at h1 h2; have := h1 ▸ h2; exact this
+    let Tval : Set (List ℕ) := fun l => l ∈ ((T' l.length).truncation l.length)
+    set _T : RootedLabeledTree := ⟨Tval, by
+      ext l; constructor
+      · intro hl; induction hl with
+        | mem l' hl' => simp only [Membership.mem, Set.Mem, hl']
+        | tail m l' hl' ih =>
+          have ih := @tail_mem ((T' (l'.length + 1)).truncation (l'.length + 1)).val m l' ih
+          simp only [Membership.mem, Set.Mem, ne_eq, truncation, Tval] at ⊢ ih
+          have := hT'tr l'.length 1; simp only [truncation] at this
+          rw [←Subtype.coe_inj, ←Subtype.coe_inj] at this; simp only [ne_eq] at this; rw [←this]
+          exact @mem_truncation_of_mem_other_truncation _
+            l'.length (l'.length + 1) l' (by omega) ih
+        | less m l' hl' n hnm ih =>
+          exact @less_mem ((T' (l'.length + 1)).truncation (l'.length + 1)).val m n l' ih hnm
+      · exact generateRootedLabeledTree.mem l
+      , Set.nonempty_iff_ne_empty.1 ⟨[], by
+        have : ([] : List ℕ) ∈ ({[]} : Set (List ℕ)) := by simp only [Set.mem_singleton_iff]
+        simp [Tval, Membership.mem, Set.Mem] at ⊢ this; exact this⟩⟩
+    have hTtr (n : ℕ) : _T.truncation n = (T' n).val.truncation n := by
+      simp only [RootedLabeledTree.truncation, ne_eq, truncation, _T, Tval]
+      apply Subtype.coe_inj.1; ext l;
+      simp [Membership.mem, Set.Mem, setOf]; intro hl
+      have := (show l.length + (n - l.length) = n from by omega) ▸ hT'tr l.length (n - l.length)
+      simp only [truncation] at this; rw [←Subtype.coe_inj] at this; simp only at this
+      constructor
+      · intro hl'; exact @mem_of_mem_truncation _ l.length _
+          (this ▸ mem_truncation_of_mem (by omega) hl')
+      · intro hl'; exact @mem_of_mem_truncation _ l.length _
+          (Eq.symm this ▸ mem_truncation_of_mem (by omega) hl')
+    set T : LocallyFinite := ⟨_T, by
+      simp only [IsLocallyFinite, ne_eq]; intro n; rw [hTtr n]
+      have := ((T' n).truncation n).property; simp [IsLocallyFinite] at this
+      have := (show min n n = n from by omega) ▸ this n; exact this⟩
+    use T; have := @nhds_basis_uniformity _ _ _ _ _ instUniformityBasis T
+    simp only [uniformityBasis, Set.mem_setOf_eq] at this
+    refine (this.ge_iff.mpr ?_); simp only [forall_const]
+    have hTtr (n : ℕ) : T.truncation n = (T' n).truncation n := by
+      simp only [T, truncation]; apply Subtype.coe_inj.1; simp only; exact hTtr n
+    intro n; exact f.sets_of_superset (hSmem (n + 1)) (by
+      simp only [Set.subset_def]; intro U hU; rw [hTtr (n + 1)]
+      exact hSsub' (n + 1) U (T' (n + 1)) hU (hT'mem (n + 1)))
+
+instance instNhdsBasis (T : LocallyFinite) : (nhds T).HasBasis (fun _ => True)
+  fun n => {T' | T'.truncation (n + 1) = T.truncation (n + 1)} :=
+  @nhds_basis_uniformity _ _ _ _ _ instUniformityBasis T
+
+noncomputable instance instFintypeTruncate (T : LocallyFinite) (n : ℕ) :
+  Fintype (T.val.truncation n).val := by
+  exact @Fintype.ofFinite _ <| Set.finite_coe_iff.2 <| T.property n
+
+instance : TopologicalSpace.SeparableSpace LocallyFinite where
+  exists_countable_dense := by
+    let F := { s : Finset (List ℕ) // s.Nonempty }
+    let embed : F → LocallyFinite := fun s => generateFinite s
+      (by simp [Finset.nonempty_iff_ne_empty.1 s.property]) (by simp only [Finset.finite_toSet])
+    use Set.range embed; constructor
+    · exact Set.countable_range embed
+    · simp [Dense]; intro T; simp [mem_closure_iff_nhds_basis (instNhdsBasis T)]; intro n
+      use ⟨Set.toFinset (T.val.truncation (n + 1)).val, by
+        use []; have := @nil_mem (T.val.truncation (n + 1)); simp [Membership.mem, Set.Mem] at this
+        simp only [ne_eq, Set.mem_toFinset]; simp only [Membership.mem, Set.Mem, *]⟩
+      simp only [generateFinite, ne_eq, Set.coe_toFinset, self_eq_generate_val,
+        truncation_truncation, min_self, embed]
 
 end LocallyFinite
 
