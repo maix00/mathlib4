@@ -404,21 +404,26 @@ end Acyclic
 
 end RootedForest
 
-inductive generateRootedLabeledTree (s : Set (List ℕ)) : Set (List ℕ)
-  | mem : (l : List ℕ) → s l → generateRootedLabeledTree s l
-  | tail : (m : ℕ) → (l : List ℕ) → generateRootedLabeledTree s (m :: l)
+@[reducible] def TreeNode := List ℕ
+
+inductive generateRootedLabeledTree (s : Set TreeNode) : Set TreeNode
+  | mem : (l : TreeNode) → s l → generateRootedLabeledTree s l
+  | tail : (m : ℕ) → (l : TreeNode) → generateRootedLabeledTree s (m :: l)
     → generateRootedLabeledTree s l
-  | less : (m : ℕ) → (l : List ℕ) → generateRootedLabeledTree s (m :: l) → (n : ℕ) → n ≤ m
+  | less : (m : ℕ) → (l : TreeNode) → generateRootedLabeledTree s (m :: l) → (n : ℕ) → n ≤ m
     → generateRootedLabeledTree s (n :: l)
 
 def RootedLabeledTree := {s // generateRootedLabeledTree s = s ∧ s ≠ ∅}
 
 namespace RootedLabeledTree
 
-instance : Coe RootedLabeledTree (Set (List ℕ)) where
+instance : Coe TreeNode (List ℕ) where
+  coe l := l
+
+instance : Coe RootedLabeledTree (Set TreeNode) where
   coe T := T.val
 
-instance : Membership (List ℕ) RootedLabeledTree where
+instance instMembershipTreeNode : Membership TreeNode RootedLabeledTree where
   mem T l := l ∈ T.val
 
 instance : HasSubset RootedLabeledTree where
@@ -436,7 +441,7 @@ instance : HasSubset RootedLabeledTree where
 
 @[simp] lemma nonempty_of_val (T : RootedLabeledTree) : T.val ≠ ∅ := T.property.2
 
-lemma generate_subset_generate_of_subset (s1 s2 : Set (List ℕ)) (h : s1 ⊆ s2) :
+lemma generate_subset_generate_of_subset (s1 s2 : Set TreeNode) (h : s1 ⊆ s2) :
   generateRootedLabeledTree s1 ⊆ generateRootedLabeledTree s2 := by
   unfold Subset Set.instHasSubset LE.le Set.instLE Set.Subset; simp; intro l hl; induction hl with
   | mem l' hl' =>
@@ -450,12 +455,12 @@ lemma generate_subset_generate_of_subset (s1 s2 : Set (List ℕ)) (h : s1 ⊆ s2
     simp [Membership.mem, Set.Mem]
     exact generateRootedLabeledTree.less m l' ih n hnm
 
-lemma subset_generate (s : Set (List ℕ)) : s ⊆ generateRootedLabeledTree s := by
+lemma subset_generate (s : Set TreeNode) : s ⊆ generateRootedLabeledTree s := by
   unfold Subset Set.instHasSubset LE.le Set.instLE Set.Subset; simp; intro l hl
   simp [Membership.mem, Set.Mem] at hl ⊢
   exact generateRootedLabeledTree.mem l hl
 
-lemma generate_generate (s : Set (List ℕ)) :
+lemma generate_generate (s : Set TreeNode) :
   generateRootedLabeledTree (generateRootedLabeledTree s) = generateRootedLabeledTree s := by
   ext l; constructor
   · intro hl; induction hl with
@@ -464,13 +469,13 @@ lemma generate_generate (s : Set (List ℕ)) :
       | less m l' hl' n hnm ih => exact generateRootedLabeledTree.less m l' ih n hnm
   · intro hl; exact generateRootedLabeledTree.mem l hl
 
-lemma nonempty_of_nonempty (s : Set (List ℕ)) (hs : s ≠ ∅) : generateRootedLabeledTree s ≠ ∅ := by
+lemma nonempty_of_nonempty (s : Set TreeNode) (hs : s ≠ ∅) : generateRootedLabeledTree s ≠ ∅ := by
   obtain ⟨l, hl⟩ := not_not.1 <| not_imp_not.2 Set.not_nonempty_iff_eq_empty.1 hs
   apply not_imp_not.2 (@Set.not_nonempty_iff_eq_empty _ (generateRootedLabeledTree s)).2
   simp only [not_not]; simp [Membership.mem, Set.Mem] at hl
   exact ⟨l, generateRootedLabeledTree.mem l hl⟩
 
-def generate (s : Set (List ℕ)) (hs : s ≠ ∅) : RootedLabeledTree :=
+def generate (s : Set TreeNode) (hs : s ≠ ∅) : RootedLabeledTree :=
   ⟨generateRootedLabeledTree s, generate_generate s, nonempty_of_nonempty s hs⟩
 
 @[simp] lemma self_eq_generate_val (T : RootedLabeledTree) :
@@ -484,35 +489,36 @@ def generate (s : Set (List ℕ)) (hs : s ≠ ∅) : RootedLabeledTree :=
     rw [←h1] at hl ih; simp [Membership.mem, Set.Mem] at hl ih ⊢
     have := h1 ▸ generateRootedLabeledTree.tail m l' (h1 ▸ hl); exact ih this
 
-@[simp] lemma tail_mem {T : RootedLabeledTree} {m : ℕ} {l : List ℕ} {h : m :: l ∈ T} : l ∈ T := by
+@[simp] lemma tail_mem {T : RootedLabeledTree} {m : ℕ} {l : TreeNode} {h : m :: l ∈ T} : l ∈ T := by
   obtain ⟨h1, h2⟩ := T.property; simp [Membership.mem, Set.Mem] at ⊢ h; rw [←h1] at ⊢ h
   exact generateRootedLabeledTree.tail m l h
 
-@[simp] lemma tail_mem' {T : RootedLabeledTree} {l : List ℕ} {h : l ∈ T} : l.tail ∈ T := by
+@[simp] lemma tail_mem' {T : RootedLabeledTree} {l : TreeNode} {h : l ∈ T} : l.tail ∈ T := by
   cases l with
   | nil => simp
   | cons m l' => simp [@tail_mem T m l' h]
 
-@[simp] lemma drop_mem {T : RootedLabeledTree} {l : List ℕ} {h : l ∈ T} {n : ℕ} : l.drop n ∈ T := by
+@[simp] lemma drop_mem {T : RootedLabeledTree} {l : TreeNode} {h : l ∈ T} {n : ℕ} :
+  l.drop n ∈ T := by
   induction n with
   | zero => simpa
   | succ n ih =>
     simp only [←@List.drop_drop _ 1 n l, List.drop_one]; exact @tail_mem' T (l.drop n) ih
 
-@[simp] lemma less_mem {T : RootedLabeledTree} {m n : ℕ} {l : List ℕ}
+@[simp] lemma less_mem {T : RootedLabeledTree} {m n : ℕ} {l : TreeNode}
   {h : m :: l ∈ T} {hnm : n ≤ m} : n :: l ∈ T := by
   obtain ⟨h1, h2⟩ := T.property; simp [Membership.mem, Set.Mem] at ⊢ h; rw [←h1] at ⊢ h
   exact generateRootedLabeledTree.less m l h n hnm
 
-noncomputable def count_children (T : RootedLabeledTree) (l : List ℕ) : ℕ∞ :=
+noncomputable def countChildren (T : RootedLabeledTree) (l : TreeNode) : ℕ∞ :=
   (⨆ (m : ℕ) (_ : (m :: l) ∈ T), m + 1 : WithTop ℕ)
 
-@[simp] lemma count_children_eq_zero {T : RootedLabeledTree} {l : List ℕ} (h : ∀ m, m :: l ∉ T) :
-  T.count_children l = 0 := by simp [count_children, *]
+@[simp] lemma countChildren_eq_zero {T : RootedLabeledTree} {l : TreeNode} (h : ∀ m, m :: l ∉ T) :
+  T.countChildren l = 0 := by simp [countChildren, *]
 
-@[simp] lemma count_children_eq_top {T : RootedLabeledTree} {l : List ℕ} (h : ∀ m, m :: l ∈ T) :
-  T.count_children l = ⊤ := by
-    simp [count_children, *]
+@[simp] lemma countChildren_eq_top {T : RootedLabeledTree} {l : TreeNode} (h : ∀ m, m :: l ∈ T) :
+  T.countChildren l = ⊤ := by
+    simp [countChildren, *]
     rw [iSup_eq_top (fun (m : ℕ) => (m + 1 : WithTop ℕ))]
     intro b hb
     match b with
@@ -523,11 +529,11 @@ noncomputable def count_children (T : RootedLabeledTree) (l : List ℕ) : ℕ∞
       have : c = b' + 1 := by have := WithTop.add_eq_coe.1 hc; aesop
       simp [*]
 
-@[simp] lemma count_children_eq_top_iff {T : RootedLabeledTree} {l : List ℕ} :
-  (∀ m, m :: l ∈ T) ↔ T.count_children l = ⊤ := by
+@[simp] lemma countChildren_eq_top_iff {T : RootedLabeledTree} {l : TreeNode} :
+  (∀ m, m :: l ∈ T) ↔ T.countChildren l = ⊤ := by
   constructor
-  · exact count_children_eq_top
-  · intro h; simp [count_children] at h
+  · exact countChildren_eq_top
+  · intro h; simp [countChildren] at h
     rw [iSup₂_eq_top (fun m => fun (_ : m :: l ∈ T) => (m + 1 : WithTop ℕ))] at h
     intro m; obtain ⟨n, hn, hmn⟩ := h (m + 1) (by simp)
     obtain ⟨m', hm', h'⟩ := WithTop.lt_iff_exists.1 hmn
@@ -538,18 +544,18 @@ noncomputable def count_children (T : RootedLabeledTree) (l : List ℕ) : ℕ∞
     simp [Membership.mem, Set.Mem] at ⊢ hn; rw [←h1] at ⊢ hn
     exact generateRootedLabeledTree.less n l hn m (by omega)
 
-@[simp] lemma count_children_ge {T : RootedLabeledTree} {l : List ℕ} {m : ℕ} (h : m :: l ∈ T) :
-  m + 1 ≤ T.count_children l := by simp [count_children]; exact @le_iSup₂ (WithTop ℕ) ℕ _ _ _ _ h
+@[simp] lemma countChildren_ge {T : RootedLabeledTree} {l : TreeNode} {m : ℕ} (h : m :: l ∈ T) :
+  m + 1 ≤ T.countChildren l := by simp [countChildren]; exact @le_iSup₂ (WithTop ℕ) ℕ _ _ _ _ h
 
-lemma count_children_mem {T : RootedLabeledTree} {l : List ℕ} {h : T.count_children l ≠ ⊤}
-  {h' : T.count_children l ≠ 0} : ∃ m : ℕ, m :: l ∈ T ∧ T.count_children l = m + 1 := by
+lemma countChildren_mem {T : RootedLabeledTree} {l : TreeNode} {h : T.countChildren l ≠ ⊤}
+  {h' : T.countChildren l ≠ 0} : ∃ m : ℕ, m :: l ∈ T ∧ T.countChildren l = m + 1 := by
   obtain ⟨n, hn⟩ := WithTop.ne_top_iff_exists.1 h
   have : n ≠ 0 := by by_contra h'; have := Eq.symm <| h' ▸ hn; simp at this; contradiction
   use (n - 1); constructor
-  · have : ↑n - 1 < T.count_children l := by
+  · have : ↑n - 1 < T.countChildren l := by
       rw [←hn]; have := WithTop.coe_inj.2 (show n - 1 = n - 1 from rfl); conv at this => left; simp
       rw [this]; exact WithTop.coe_lt_coe.2 (show n - 1 < n from by omega)
-    rw [count_children, iSup_subtype', iSup] at hn this
+    rw [countChildren, iSup_subtype', iSup] at hn this
     obtain ⟨n', hn'1, hn'2⟩ := (@lt_sSup_iff (WithTop ℕ) _ _ _).1 this
     have hn'5 := hn ▸ le_sSup hn'1
     have : n' = ↑n := by
@@ -569,15 +575,15 @@ lemma count_children_mem {T : RootedLabeledTree} {l : List ℕ} {h : T.count_chi
       set n' := n - 1 with hn'; rw [show n = n' + 1 from by omega]; aesop];
     exact Eq.symm hn
 
-lemma count_children_ge_iff {T : RootedLabeledTree} {l : List ℕ} {m : ℕ} :
-  m :: l ∈ T ↔ m + 1 ≤ T.count_children l := by
+lemma countChildren_ge_iff {T : RootedLabeledTree} {l : TreeNode} {m : ℕ} :
+  m :: l ∈ T ↔ m + 1 ≤ T.countChildren l := by
   constructor
-  · exact count_children_ge
+  · exact countChildren_ge
   · intro h
-    by_cases T.count_children l = ⊤
-    · exact count_children_eq_top_iff.2 ‹_› m
-    · set n := (T.count_children l).untop ‹_› with hn
-      have hn : ↑n = T.count_children l := Eq.symm <| (WithTop.untop_eq_iff ‹_›).1 <| Eq.symm hn
+    by_cases T.countChildren l = ⊤
+    · exact countChildren_eq_top_iff.2 ‹_› m
+    · set n := (T.countChildren l).untop ‹_› with hn
+      have hn : ↑n = T.countChildren l := Eq.symm <| (WithTop.untop_eq_iff ‹_›).1 <| Eq.symm hn
       have : m + 1 ≤ n := by
         rw [←hn] at h
         obtain ⟨m', hm', h'⟩ := WithTop.le_coe_iff.1 h
@@ -586,7 +592,7 @@ lemma count_children_ge_iff {T : RootedLabeledTree} {l : List ℕ} {m : ℕ} :
         rw [←(@WithTop.coe_inj ℕ (m + 1) m').1 hm'] at h'; exact h'
       have : n ≠ 0 := by omega
       have : (n - 1) :: l ∈ T := by
-        obtain ⟨k, hk, hk'⟩ := @T.count_children_mem l ‹_›
+        obtain ⟨k, hk, hk'⟩ := @T.countChildren_mem l ‹_›
           (by rw [←hn]; exact not_imp_not.2 WithTop.coe_inj.1 this)
         rw [←hn] at hk'
         have : k = n - 1 := by
@@ -595,29 +601,29 @@ lemma count_children_ge_iff {T : RootedLabeledTree} {l : List ℕ} {m : ℕ} :
       obtain ⟨h1, h2⟩ := T.property; simp [Membership.mem, Set.Mem] at this ⊢; rw [←h1] at this ⊢
       exact generateRootedLabeledTree.less (n - 1) l this m (by omega)
 
-private def ext_of_count_children_aux {T1 T2 : RootedLabeledTree}
-  (h : ∀ l, T1.count_children l = T2.count_children l) (l : List ℕ) : l ∈ T1 → l ∈ T2 := by
+private def ext_of_countChildren_aux {T1 T2 : RootedLabeledTree}
+  (h : ∀ l, T1.countChildren l = T2.countChildren l) (l : TreeNode) : l ∈ T1 → l ∈ T2 := by
   obtain ⟨h1, h1'⟩ := Subtype.property T1; obtain ⟨h2, h2'⟩ := Subtype.property T2
   simp [Membership.mem, Set.Mem]; intro hl
   cases l with
   | nil => exact T2.nil_mem
   | cons m l' =>
-    have := count_children_ge_iff.2 <| h l' ▸ T1.count_children_ge hl
+    have := countChildren_ge_iff.2 <| h l' ▸ T1.countChildren_ge hl
     simp [Membership.mem, Set.Mem] at this; exact this
 
-@[ext] def ext_of_count_children (T1 T2 : RootedLabeledTree)
-  (h : ∀ l, T1.count_children l = T2.count_children l) : T1 = T2 := by
+@[ext] def ext_of_countChildren (T1 T2 : RootedLabeledTree)
+  (h : ∀ l, T1.countChildren l = T2.countChildren l) : T1 = T2 := by
   apply Subtype.ext_iff.2; ext l
   constructor
-  · exact ext_of_count_children_aux h l
-  · exact ext_of_count_children_aux (fun l => Eq.symm <| h l) l
+  · exact ext_of_countChildren_aux h l
+  · exact ext_of_countChildren_aux (fun l => Eq.symm <| h l) l
 
-noncomputable instance : FunLike RootedLabeledTree (List ℕ) ℕ∞ where
-  coe T := T.count_children
+noncomputable instance : FunLike RootedLabeledTree TreeNode ℕ∞ where
+  coe T := T.countChildren
   coe_injective' T1 T2 h := by
     ext l; simp at h; have := congrArg (fun f => f l) h; simpa using this
 
-def descendantTreeAt {T : RootedLabeledTree} (x : List ℕ) (hx : x ∈ T) : RootedLabeledTree := ⟨
+def descendantTreeAt {T : RootedLabeledTree} (x : TreeNode) (hx : x ∈ T) : RootedLabeledTree := ⟨
   {x' | x' ++ x ∈ T}, by
     obtain ⟨h1, h2⟩ := T.property
     ext l; constructor
@@ -637,7 +643,10 @@ def descendantTreeAt {T : RootedLabeledTree} (x : List ℕ) (hx : x ∈ T) : Roo
   ⟩
 
 noncomputable def height (T : RootedLabeledTree) : ℕ∞ :=
-  (⨆ (x : List ℕ) (_ : x ∈ T), x.length : WithTop ℕ)
+  (⨆ (x : TreeNode) (_ : x ∈ T), x.length : WithTop ℕ)
+
+@[simp] lemma mem_length_at_most_height {T : RootedLabeledTree} : ∀ v ∈ T, v.length ≤ T.height := by
+  simp [height]; exact @le_iSup₂ _ _ _ _ (fun v => fun (_ : v ∈ T) => (v.length : WithTop ℕ))
 
 def truncation (T : RootedLabeledTree) (n : ℕ) : RootedLabeledTree := ⟨
   {x | x.length ≤ n ∧ x ∈ T},  by
@@ -664,16 +673,16 @@ def nilRootedLabeledTree := generate {[]} (by simp)
   · intro hl; simp [Membership.mem, Set.Mem] at hl
     induction hl with
     | mem l' hl'=>
-      have : l' ∈ ({[]} : Set (List ℕ)) := by simp [Membership.mem, Set.Mem, *]
+      have : l' ∈ ({[]} : Set TreeNode) := by simp [Membership.mem, Set.Mem, *]
       simp [Set.mem_singleton_iff.1 this]
     | tail => contradiction
     | less => contradiction
   · intro hl; simp at hl; simp [Membership.mem, Set.Mem, hl]
     exact generateRootedLabeledTree.mem [] (by
-      have : ([] : List ℕ) ∈ ({[]} : Set (List ℕ)) := by simp
+      have : ([] : TreeNode) ∈ ({[]} : Set TreeNode) := by simp
       simp [Membership.mem, Set.Mem] at this; exact this)
 
-@[simp] lemma nilRootedLabeledTree_eq : nilRootedLabeledTree = ⟨({[]} : Set (List ℕ)),
+@[simp] lemma nilRootedLabeledTree_eq : nilRootedLabeledTree = ⟨({[]} : Set TreeNode),
   nilRootedLabeledTree_aux, by simp⟩  := by simp [nilRootedLabeledTree, generate]
 
 @[simp] lemma truncation_zero {T : RootedLabeledTree} : T.truncation 0 = nilRootedLabeledTree := by
@@ -682,20 +691,19 @@ def nilRootedLabeledTree := generate {[]} (by simp)
 
 lemma truncation_height_at_most {T : RootedLabeledTree} (n : ℕ) :
   (T.truncation n).height ≤ n := by
-  simp [truncation, height, instMembershipListNat]
+  simp [truncation, height, instMembershipTreeNode]
   apply @iSup₂_le (WithTop ℕ); intro l hl; exact ENat.coe_le_coe.2 hl.1
 
-noncomputable def heightCongr (T1 T2 : RootedLabeledTree) : ℕ∞ :=
-  (⨆ (n : ℕ) (_ : T1.truncation n = T2.truncation n), n : WithTop ℕ)
-
-@[simp] lemma heightCongr_comm {T1 T2 : RootedLabeledTree} :
-  heightCongr T1 T2 = heightCongr T2 T1 := by simp [heightCongr, eq_comm]
+@[simp] lemma truncation_mem_length_at_most {T : RootedLabeledTree} (n : ℕ) :
+  ∀ v ∈ T.truncation n, v.length ≤ n := by
+  intro v hv; have := le_trans (mem_length_at_most_height v hv) (@truncation_height_at_most T n)
+  simp at this; exact this
 
 @[simp] lemma truncation_truncation {T : RootedLabeledTree} {n m : ℕ} :
   (T.truncation n).truncation m = T.truncation (min n m) := by
-  simp [truncation, instMembershipListNat]; apply Subtype.val_inj.1; ext; simp; aesop
+  simp [truncation, instMembershipTreeNode]; apply Subtype.val_inj.1; ext; simp; aesop
 
-@[simp] lemma mem_of_mem_truncation {T : RootedLabeledTree} {n : ℕ} {l : List ℕ}
+@[simp] lemma mem_of_mem_truncation {T : RootedLabeledTree} {n : ℕ} {l : TreeNode}
   (hl : l ∈ T.truncation n) : l ∈ T := by
   simp [truncation, setOf, Membership.mem, Set.Mem] at hl ⊢; exact hl.2
 
@@ -703,15 +711,15 @@ noncomputable def heightCongr (T1 T2 : RootedLabeledTree) : ℕ∞ :=
   dsimp [instHasSubset]; simp [Set.subset_def]; exact @mem_of_mem_truncation T n
 
 @[simp] lemma mem_higher_truncation_of_mem_truncation {T : RootedLabeledTree} {n m : ℕ}
-  (hnm : n < m) {l : List ℕ} (hl : l ∈ T.truncation n) : l ∈ T.truncation m := by
+  (hnm : n < m) {l : TreeNode} (hl : l ∈ T.truncation n) : l ∈ T.truncation m := by
   simp [truncation, setOf, Membership.mem, Set.Mem] at hl ⊢; exact ⟨by omega, hl.2⟩
 
-@[simp] lemma mem_truncation_of_mem {T : RootedLabeledTree} {n : ℕ} {l : List ℕ}
+@[simp] lemma mem_truncation_of_mem {T : RootedLabeledTree} {n : ℕ} {l : TreeNode}
   (hl : l.length ≤ n) (hl' : l ∈ T) : l ∈ T.truncation n := by
   simp [truncation, setOf, Membership.mem, Set.Mem] at hl' ⊢; exact ⟨by omega, hl'⟩
 
 @[simp] lemma mem_truncation_of_mem_other_truncation {T : RootedLabeledTree} {n m : ℕ}
-  {l : List ℕ} (hl : l.length ≤ n) (hl' : l ∈ T.truncation m) : l ∈ T.truncation n := by
+  {l : TreeNode} (hl : l.length ≤ n) (hl' : l ∈ T.truncation m) : l ∈ T.truncation n := by
   simp [truncation, setOf, Membership.mem, Set.Mem] at hl ⊢; exact ⟨by omega, hl'.2⟩
 
 lemma ext_of_truncation {T1 T2 : RootedLabeledTree} (h : ∀ n, T1.truncation n = T2.truncation n) :
@@ -737,6 +745,12 @@ lemma ext_of_truncation {T1 T2 : RootedLabeledTree} (h : ∀ n, T1.truncation n 
       have h := Subtype.val_inj.2 h; simp [setOf] at h
       have h := congrArg (fun f ↦ f (m :: l')) h; simp at h
       exact h.2 ‹_›
+
+noncomputable def heightCongr (T1 T2 : RootedLabeledTree) : ℕ∞ :=
+  (⨆ (n : ℕ) (_ : T1.truncation n = T2.truncation n), n : WithTop ℕ)
+
+@[simp] lemma heightCongr_comm {T1 T2 : RootedLabeledTree} :
+  heightCongr T1 T2 = heightCongr T2 T1 := by simp [heightCongr, eq_comm]
 
 lemma ext_of_top_heightCongr {T1 T2 : RootedLabeledTree} (h : heightCongr T1 T2 = ⊤) :
   T1 = T2 := by
@@ -931,7 +945,7 @@ instance : CompleteSpace RootedLabeledTree where
       have h2 := hSsub' n U (T' n) ((Set.mem_inter_iff _ _ _).1 hU).2 (hT'mem n)
       have h1 := congrArg (fun T => T.truncation n) h1; simp at h1
       exact h1 ▸ h2
-    let Tval : Set (List ℕ) := fun l => l ∈ ((T' l.length).truncation l.length)
+    let Tval : Set TreeNode := fun l => l ∈ ((T' l.length).truncation l.length)
     set T : RootedLabeledTree := ⟨Tval, by
       ext l; constructor
       · intro hl; induction hl with
@@ -945,7 +959,7 @@ instance : CompleteSpace RootedLabeledTree where
           exact @less_mem ((T' (l'.length + 1)).truncation (l'.length + 1)) m n l' ih hnm
       · exact generateRootedLabeledTree.mem l
       , Set.nonempty_iff_ne_empty.1 ⟨[], by
-        have : ([] : List ℕ) ∈ ({[]} : Set (List ℕ)) := by simp only [Set.mem_singleton_iff]
+        have : ([] : TreeNode) ∈ ({[]} : Set TreeNode) := by simp only [Set.mem_singleton_iff]
         simp [Tval, Membership.mem, Set.Mem] at ⊢ this; exact this⟩⟩
     use T; have := @nhds_basis_uniformity _ _ _ _ _ instUniformityBasis T
     simp only [uniformityBasis, Set.mem_setOf_eq] at this
@@ -963,59 +977,74 @@ instance : CompleteSpace RootedLabeledTree where
       simp only [Set.subset_def, Set.mem_setOf_eq]; intro U hU; rw [hTtr (n + 1)]
       exact hSsub' (n + 1) U (T' (n + 1)) hU (hT'mem (n + 1)))
 
-private def generate_tail_of_single (l : List ℕ) : Set (List ℕ) :=
+instance : MeasurableSpace RootedLabeledTree := borel RootedLabeledTree
+
+private def generate_tail_of_single (l : TreeNode) : Set TreeNode :=
   ⋃ (n : Fin (l.length + 1)), {l.drop n}
 
-@[simp] private lemma finite_generate_tail_of_single (l : List ℕ) :
+@[simp] private lemma finite_generate_tail_of_single (l : TreeNode) :
   (generate_tail_of_single l).Finite := by
   simp only [generate_tail_of_single]; apply Set.finite_iUnion; simp
 
-@[simp] private lemma mem_self_generate_tail_of_single (l : List ℕ) :
+@[simp] private lemma mem_self_generate_tail_of_single (l : TreeNode) :
   l ∈ generate_tail_of_single l := by simp [generate_tail_of_single]; use 0; simp
 
-private def generate_tail (s : Set (List ℕ)) : Set (List ℕ) := ⋃ l : ↑s, generate_tail_of_single l
+@[simp] private lemma treeNode_eq_of_mem_generate_tail_of_single_of_same_length (v u : TreeNode)
+  (hvu : v.length = u.length) (hu : u ∈ generate_tail_of_single v) : u = v := by
+  simp [generate_tail_of_single] at hu; obtain ⟨n, hn⟩ := hu
+  have := n.is_lt; set n' : ℕ := ↑n with hn'
+  have := Eq.symm hvu ▸ congrArg List.length hn; simp at this
+  have := (show n' = 0 from by omega) ▸ hn; simp at this; exact Eq.symm this
 
-@[simp] private lemma finite_generate_tail_of_finite (s : Set (List ℕ)) (hs : s.Finite) :
+private def generate_tail (s : Set TreeNode) : Set TreeNode := ⋃ l : ↑s, generate_tail_of_single l
+
+@[simp] private lemma finite_generate_tail_of_finite (s : Set TreeNode) (hs : s.Finite) :
   (generate_tail s).Finite := by
   simp only [generate_tail]
   apply fun h => @Set.finite_iUnion _ _ (Set.finite_coe_iff.2 hs) _ h; simp
 
-@[simp] private lemma mem_self_generate_tail (l : List ℕ) (s : Set (List ℕ)) (h : l ∈ ↑s) :
+@[simp] private lemma mem_self_generate_tail (l : TreeNode) (s : Set TreeNode) (h : l ∈ ↑s) :
   l ∈ generate_tail s := by simp [generate_tail]; use l; simp [*]
 
-@[simp] private lemma tail_mem_of_mem_generate_tail (m : ℕ) (l : List ℕ) (s : Set (List ℕ))
+@[simp] private lemma tail_mem_of_mem_generate_tail (m : ℕ) (l : TreeNode) (s : Set TreeNode)
   (h : m :: l ∈ generate_tail s) : l ∈ generate_tail s := by
   simp [generate_tail] at h ⊢; obtain ⟨l', hl'1, hl'2⟩ := h
   simp [generate_tail_of_single] at hl'2 ⊢; obtain ⟨⟨n, hn⟩, hl'2⟩ := hl'2; simp at hl'2
   by_cases hl'3 : n = l'.length
   · simp [hl'3] at hl'2
-  · use l'; simp [*]; use ⟨n + 1, by omega⟩; simp only [← @List.drop_drop _ 1 n l', hl'2,
+  · use l'; simp [*]; use ⟨n + 1, by omega⟩; simp only [←@List.drop_drop _ 1 n l', hl'2,
     List.drop_succ_cons, List.drop_zero]
 
-private def generate_less_of_single (l : List ℕ) (hl : l ≠ []) : Set (List ℕ) :=
+private def generate_less_of_single (l : TreeNode) (hl : l ≠ []) : Set TreeNode :=
   ⋃ (n : Fin (l.head hl + 1)), {(n : ℕ) :: l.tail}
 
-@[simp] private lemma finite_generate_less_of_single (l : List ℕ) (hl : l ≠ []) :
+@[simp] private lemma finite_generate_less_of_single (l : TreeNode) (hl : l ≠ []) :
   (generate_less_of_single l hl).Finite := by
   simp only [generate_less_of_single]; apply Set.finite_iUnion; simp
 
-@[simp] private lemma mem_self_generate_less_of_single (l : List ℕ) (hl : l ≠ []) :
+@[simp] private lemma mem_self_generate_less_of_single (l : TreeNode) (hl : l ≠ []) :
   l ∈ generate_less_of_single l hl := by
   simp [generate_less_of_single]; use ⟨l.head hl, by omega⟩; simp
 
-private def generate_less (s : Set (List ℕ)) (hs : [] ∉ s) :=
+@[simp] private lemma same_length_of_mem_generate_less_of_single (v u : TreeNode) (hv : v ≠ [])
+  (hu : u ∈ generate_less_of_single v hv) : v.length = u.length := by
+  simp [generate_less_of_single] at hu; obtain ⟨m, hu'⟩ := hu
+  have : v.length ≠ 0 := (by simp [hv]); have := congrArg List.length hu'; simp at this
+  rw [(show v.length - 1 + 1 = v.length from by omega)] at this; exact this
+
+private def generate_less (s : Set TreeNode) (hs : [] ∉ s) :=
   ⋃ l : ↑s, generate_less_of_single l (by aesop)
 
-@[simp] private lemma finite_generate_less (s : Set (List ℕ)) (hs : [] ∉ s) (hs' : s.Finite) :
+@[simp] private lemma finite_generate_less (s : Set TreeNode) (hs : [] ∉ s) (hs' : s.Finite) :
   (generate_less s hs).Finite := by
   simp only [generate_less]
   apply fun h => @Set.finite_iUnion _ _ (Set.finite_coe_iff.2 hs') _ h; simp
 
-@[simp] private lemma mem_self_generate_less (l : List ℕ) (s : Set (List ℕ)) (hs : [] ∉ s)
+@[simp] private lemma mem_self_generate_less (l : TreeNode) (s : Set TreeNode) (hs : [] ∉ s)
   (hl' : l ∈ ↑s) : l ∈ generate_less s hs := by simp [generate_less]; use l, hl'; simp
 
-@[simp] private lemma cons_mem_of_mem_generate_less (s : Set (List ℕ)) (hs : [] ∉ s) (m : ℕ)
-  (l : List ℕ) (hl : m :: l ∈ generate_less s hs) : ∃ n, m ≤ n ∧ n :: l ∈ s := by
+@[simp] private lemma cons_mem_of_mem_generate_less (s : Set TreeNode) (hs : [] ∉ s) (m : ℕ)
+  (l : TreeNode) (hl : m :: l ∈ generate_less s hs) : ∃ n, m ≤ n ∧ n :: l ∈ s := by
   simp [generate_less] at hl; obtain ⟨l', hl'1, hl'2⟩ := hl
   simp [generate_less_of_single] at hl'2; obtain ⟨⟨⟨m', hm'⟩, hl'2⟩, hl'3⟩ := hl'2
   cases l' with
@@ -1024,12 +1053,13 @@ private def generate_less (s : Set (List ℕ)) (hs : [] ∉ s) :=
     use n; simp_all only [List.tail_cons]; simp only [List.head_cons] at hm'; subst_vars
     exact ⟨by omega, hl'1⟩
 
-@[simp] private lemma less_mem_of_mem_generate_less (s : Set (List ℕ)) (hs : [] ∉ s) (n m : ℕ)
-  (hmn : n ≤ m) (l : List ℕ) (hl : m :: l ∈ generate_less s hs) : n :: l ∈ generate_less s hs := by
+@[simp] private lemma less_mem_of_mem_generate_less (s : Set TreeNode) (hs : [] ∉ s) (n m : ℕ)
+  (hmn : n ≤ m) (l : TreeNode) (hl : m :: l ∈ generate_less s hs) : n :: l ∈ generate_less s hs
+  := by
   obtain ⟨n', hmn', hl'⟩ := cons_mem_of_mem_generate_less s hs m l hl
   simp [generate_less]; use n' :: l, hl'; simp [generate_less_of_single]; use ⟨n, by omega⟩
 
-private lemma generate_eq_generate_tail_then_less (s : Set (List ℕ)) (hs : s ≠ ∅) :
+private lemma generate_eq_generate_tail_then_less (s : Set TreeNode) (hs : s ≠ ∅) :
   generateRootedLabeledTree s = {[]} ∪ generate_less (generate_tail s \ {[]}) (by simp) := by
   ext l; simp only [Set.singleton_union, Set.mem_insert_iff]; constructor
   · intro hl; by_cases hl'1 : l = []
@@ -1049,7 +1079,7 @@ private lemma generate_eq_generate_tail_then_less (s : Set (List ℕ)) (hs : s �
         simp only [reduceCtorEq, not_false_eq_true, forall_const] at ih
         exact less_mem_of_mem_generate_less _ _ n m hnm l' ih
   · intro hl; by_cases hl'1 : l = []
-    · have := hl'1 ▸ @nil_mem (generate s hs); simp only [generate, instMembershipListNat] at this
+    · have := hl'1 ▸ @nil_mem (generate s hs); simp only [generate, instMembershipTreeNode] at this
       exact this
     · simp [hl'1, generate_less] at hl; obtain ⟨l', ⟨hl'2, hl'3⟩, hl'4⟩ := hl
       simp [generate_tail] at hl'2; obtain ⟨l'', hl'2, hl'5⟩ := hl'2
@@ -1060,7 +1090,7 @@ private lemma generate_eq_generate_tail_then_less (s : Set (List ℕ)) (hs : s �
         @drop_mem (generate s hs) l'' (generateRootedLabeledTree.mem l'' hl'2) n
       exact hl'4 ▸ @less_mem (generate s hs) (l'.head hl'3) m l'.tail this (by omega)
 
-@[simp] lemma finite_of_generateRootedLabeledTree_finite {s : Set (List ℕ)} (hs : s.Finite) :
+@[simp] lemma finite_of_generateRootedLabeledTree_finite {s : Set TreeNode} (hs : s.Finite) :
   Set.Finite (generateRootedLabeledTree s) := by
   by_cases s = ∅
   · simp [nil_generate, *]
@@ -1068,7 +1098,7 @@ private lemma generate_eq_generate_tail_then_less (s : Set (List ℕ)) (hs : s �
     exact finite_generate_less _ (by aesop)
       <| @Finite.Set.finite_diff _ _ {[]} <| finite_generate_tail_of_finite s hs
 
-@[simp] lemma finite_of_generate_finite {s : Set (List ℕ)} (hs : s ≠ ∅) (hs' : s.Finite) :
+@[simp] lemma finite_of_generate_finite {s : Set TreeNode} (hs : s ≠ ∅) (hs' : s.Finite) :
   Set.Finite (generate s hs).val := by
   simp [generate, finite_of_generateRootedLabeledTree_finite hs']
 
@@ -1078,6 +1108,80 @@ private lemma generate_eq_generate_tail_then_less (s : Set (List ℕ)) (hs : s �
   have : (T.val \ (T.val \ (T.truncation n).val)) = (T.truncation n).val := by simp [*]
   exact this ▸ @Finite.Set.finite_diff _ T.val (T.val \ (T.truncation n).val) hT
 
+def treeNodeAtLevel (T : RootedLabeledTree) (n : ℕ) : Set TreeNode :=
+  (T.truncation n).val \ if n = 0 then ∅ else (T.truncation (n - 1)).val
+
+@[simp] lemma treeNodeAtLevel_zero {T : RootedLabeledTree} : T.treeNodeAtLevel 0 = {[]} := by
+  simp [treeNodeAtLevel]
+
+@[simp] lemma treeNodeAtLevel_same_length {T : RootedLabeledTree} {n : ℕ} :
+  ∀ ν ∈ T.treeNodeAtLevel n, ν.length = n := by
+  intro v hv; simp [treeNodeAtLevel, truncation] at hv; by_cases h : n = 0
+  · have := h ▸ hv.1.1; omega
+  · have := (not_imp_not.2 <| hv.2 h) (not_not.2 hv.1.2); omega
+
+@[simp] lemma finite_treeNodeAtLevel_of_finite {T : RootedLabeledTree} (hT : Set.Finite T.val)
+  (n : ℕ) : Set.Finite (T.treeNodeAtLevel n) := by
+  simp [treeNodeAtLevel]; by_cases h : n = 0
+  · simp [h]
+  · simp [h]; exact @Finite.Set.finite_diff _ _ _ (finite_truncation_of_finite hT n)
+
+def _root_.TreeNode.setTreeNodeOfLength (n : ℕ) : Set TreeNode := {ν | ν.length = n}
+
+open TreeNode
+
+@[simp] lemma treeNodeAtLevel_subset_setTreeNodeOfLength {T : RootedLabeledTree} {n : ℕ} :
+  T.treeNodeAtLevel n ⊆ setTreeNodeOfLength n := by
+  simp [setTreeNodeOfLength, Set.subset_def]; exact treeNodeAtLevel_same_length
+
+instance _root_.TreeNode.instCountableSetTreeNodeOfLength (n : ℕ) :
+  Countable (setTreeNodeOfLength n) := by
+  simp [setTreeNodeOfLength]; exact Subtype.countable
+
+def _root_.TreeNode.setTreeNodeOfLengthTruncated (n m : ℕ) : Set TreeNode :=
+  ⋃ f : Fin n → Fin (m + 1), {(List.ofFn f).map Fin.val}
+
+instance _root_.TreeNode.instFiniteSetTreeNodeOfLengthTruncated (n m : ℕ) :
+  Set.Finite (setTreeNodeOfLengthTruncated n m) := by
+  simp only [setTreeNodeOfLengthTruncated]; apply Finite.Set.finite_iUnion
+
+@[simp] lemma _root_.TreeNode.setTreeNodeOfLengthTruncated_subset_setTreeNodeOfLength (n m : ℕ) :
+  setTreeNodeOfLengthTruncated n m ⊆ setTreeNodeOfLength n := by
+  simp [Set.subset_def, setTreeNodeOfLengthTruncated, setTreeNodeOfLength]
+
+@[simp] lemma _root_.TreeNode.setTreeNodeOfLengthTruncated_subset_mono (n m1 m2 : ℕ)
+  (h12 : m1 ≤ m2) : setTreeNodeOfLengthTruncated n m1 ⊆ setTreeNodeOfLengthTruncated n m2 := by
+  simp [Set.subset_def, setTreeNodeOfLengthTruncated]; intro f
+  use Fin.castLE (show m1 + 1 ≤ m2 + 1 from by omega) ∘ f; ext; simp
+
+@[simp] lemma _root_.TreeNode.setTreeNodeOfLengthTruncated_union_eq_setTreeNodeOfLength (n : ℕ) :
+  ⋃ m : ℕ, setTreeNodeOfLengthTruncated n m = setTreeNodeOfLength n := by
+  ext v; simp only [Set.mem_iUnion]; constructor
+  · intro ⟨m, h⟩; exact Set.mem_of_subset_of_mem (by simp) h
+  · intro h; by_cases h' : n = 0
+    · simp [setTreeNodeOfLength] at h
+      have : v = [] := List.eq_nil_iff_length_eq_zero.2 <| h' ▸ h
+      use 0; simp [setTreeNodeOfLengthTruncated, *]
+    · simp only [setTreeNodeOfLength, Set.mem_setOf_eq] at h
+      set m := v.max? with hm
+      have : ∃ m', m = some m' := by
+        match v with
+        | [] => absurd h; simp; exact Ne.symm h'
+        | n' :: v' => simp only [List.max?_cons] at hm; simp only [hm, Option.some.injEq,
+          exists_eq']
+      obtain ⟨m', hm'⟩ := this; use m'; simp [setTreeNodeOfLengthTruncated]
+      use fun ⟨i, hi⟩ => ⟨v[i], by
+        have := List.le_max?_get_of_mem (show v[i] ∈ v from by simp)
+        conv at this => right; congr; simp [←(hm' ▸ hm)]
+        simp at this; omega⟩; simp only; conv => congr; congr; ext i; simp
+      ext; aesop
+
+instance _root_.ENat.instTopologicalSpace : TopologicalSpace ENat :=
+  TopologicalSpace.induced ENat.toENNReal inferInstance
+
+noncomputable def generationSizeAtLevel' (T : RootedLabeledTree) (n : ℕ) : ENat :=
+  ∑' (ν : ↑(T.treeNodeAtLevel n)), T.countChildren ν
+
 def IsLocallyFinite (T : RootedLabeledTree) := ∀ n, Set.Finite (T.truncation n).val
 
 def LocallyFinite := {T : RootedLabeledTree // T.IsLocallyFinite}
@@ -1085,7 +1189,7 @@ def LocallyFinite := {T : RootedLabeledTree // T.IsLocallyFinite}
 lemma isLocallyFinite_of_truncation {T : RootedLabeledTree} (hT : T.IsLocallyFinite) (n : ℕ) :
   IsLocallyFinite (T.truncation n) := by simp [IsLocallyFinite] at ⊢ hT; intro m; exact hT (min n m)
 
-def LocallyFinite.generateFinite (s : Set (List ℕ)) (hs : s ≠ ∅) (hs' : s.Finite) : LocallyFinite :=
+def LocallyFinite.generateFinite (s : Set TreeNode) (hs : s ≠ ∅) (hs' : s.Finite) : LocallyFinite :=
   ⟨generate s hs, by
     simp [IsLocallyFinite]; exact finite_truncation_of_finite <| finite_of_generate_finite hs hs'⟩
 
@@ -1096,10 +1200,10 @@ noncomputable instance : MetricSpace LocallyFinite := Subtype.metricSpace
 instance : IsUltrametricDist LocallyFinite where
   dist_triangle_max T1 T2 T3 := treeDist_ultra T1.val T2.val T3.val
 
-instance : Coe LocallyFinite (Set (List ℕ)) where
+instance : Coe LocallyFinite (Set TreeNode) where
   coe T := T.val
 
-instance : Membership (List ℕ) LocallyFinite where
+instance : Membership TreeNode LocallyFinite where
   mem T l := l ∈ T.val
 
 instance : HasSubset LocallyFinite where
@@ -1177,7 +1281,7 @@ instance : CompleteSpace LocallyFinite where
       have h1 := hSsub' (n + m) U (T' (n + m)) ((Set.mem_inter_iff _ _ _).1 hU).1 (hT'mem (n + m))
       have h2 := hSsub' n U (T' n) ((Set.mem_inter_iff _ _ _).1 hU).2 (hT'mem n)
       have h1 := congrArg (fun T => T.truncation n) h1; simp at h1 h2; have := h1 ▸ h2; exact this
-    let Tval : Set (List ℕ) := fun l => l ∈ ((T' l.length).truncation l.length)
+    let Tval : Set TreeNode := fun l => l ∈ ((T' l.length).truncation l.length)
     set _T : RootedLabeledTree := ⟨Tval, by
       ext l; constructor
       · intro hl; induction hl with
@@ -1193,7 +1297,7 @@ instance : CompleteSpace LocallyFinite where
           exact @less_mem ((T' (l'.length + 1)).truncation (l'.length + 1)).val m n l' ih hnm
       · exact generateRootedLabeledTree.mem l
       , Set.nonempty_iff_ne_empty.1 ⟨[], by
-        have : ([] : List ℕ) ∈ ({[]} : Set (List ℕ)) := by simp only [Set.mem_singleton_iff]
+        have : ([] : TreeNode) ∈ ({[]} : Set TreeNode) := by simp only [Set.mem_singleton_iff]
         simp [Tval, Membership.mem, Set.Mem] at ⊢ this; exact this⟩⟩
     have hTtr (n : ℕ) : _T.truncation n = (T' n).val.truncation n := by
       simp only [RootedLabeledTree.truncation, ne_eq, truncation, _T, Tval]
@@ -1229,35 +1333,84 @@ noncomputable instance instFintypeTruncate (T : LocallyFinite) (n : ℕ) :
 
 instance : TopologicalSpace.SeparableSpace LocallyFinite where
   exists_countable_dense := by
-    let F := { s : Finset (List ℕ) // s.Nonempty }
+    let F := { s : Finset TreeNode // s.Nonempty }
     let embed : F → LocallyFinite := fun s => generateFinite s
       (by simp [Finset.nonempty_iff_ne_empty.1 s.property]) (by simp only [Finset.finite_toSet])
+    -- `Countable` is inferred in `use` from `Set.countable_range` and `Countable F`, which in turn
+    -- is inferred from `Subtype.countable`, `Finset.countable`, and `Countable TreeNode`
     use Set.range embed; constructor
     · exact Set.countable_range embed
     · simp [Dense]; intro T; simp [mem_closure_iff_nhds_basis (instNhdsBasis T)]; intro n
+      -- In `Set.toFinset`, `Fintype ↑(T.val.truncation n).val` is required for element in `F`
+      -- this means `LocallyFinite` is required here, because otherwise it is not `Fintype`
       use ⟨Set.toFinset (T.val.truncation (n + 1)).val, by
         use []; have := @nil_mem (T.val.truncation (n + 1)); simp [Membership.mem, Set.Mem] at this
+        -- In `Set.mem_toFinset`, `Fintype (T.val.truncation n).val` is required likewise
         simp only [ne_eq, Set.mem_toFinset]; simp only [Membership.mem, Set.Mem, *]⟩
       simp only [generateFinite, ne_eq, Set.coe_toFinset, self_eq_generate_val,
         truncation_truncation, min_self, embed]
+
+instance : MeasurableSpace LocallyFinite := borel LocallyFinite
+
+instance : Coe LocallyFinite RootedLabeledTree where
+  coe T := T.val
+
+@[simp] lemma countChildren_finite (T : LocallyFinite) (ν : TreeNode) :
+  countChildren ↑T ν ≠ ⊤ := by
+  simp [←countChildren_eq_top_iff]
+  set S := T.val.truncation (ν.length + 1) with hS
+  have hT := (@Nat.card_eq_fintype_card _
+    <| hS ▸ (@Fintype.ofFinite _ <| T.property (ν.length + 1)))
+    ▸ hS ▸ (@Finite.equivFin _ <| T.property (ν.length + 1))
+  set n := @Fintype.card _ <| hS ▸ (@Fintype.ofFinite _ <| T.property (ν.length + 1)) with hn
+  use n; by_contra h; have h := hS ▸ @mem_truncation_of_mem _ (ν.length + 1) _ (by simp) h
+  let F (m : Fin (n + 1)) : S.val.Elem := ⟨m :: ν, @less_mem S n _ ν h (by omega)⟩
+  have := Fintype.card_le_of_injective F (by simp [Function.Injective, F]; omega); simp [hn] at this
+
+noncomputable def countChildren (T : LocallyFinite) (ν : TreeNode) : ℕ :=
+  (RootedLabeledTree.countChildren ↑T ν).toNat
+
+@[ext] def ext_of_countChildren (T1 T2 : LocallyFinite)
+  (h : ∀ l, T1.countChildren l = T2.countChildren l) : T1 = T2 :=
+  Subtype.coe_inj.1 <| RootedLabeledTree.ext_of_countChildren _ _ (by
+    intro l; specialize h l; simp [countChildren] at h
+    exact @ENat.coe_toNat (T1.val.countChildren l) (by simp)
+      ▸ h ▸ @ENat.coe_toNat (T2.val.countChildren l) (by simp))
+
+noncomputable instance : FunLike LocallyFinite TreeNode ℕ where
+  coe T := T.countChildren
+  coe_injective' T1 T2 h := by
+    ext l; simp at h; have := congrArg (fun f => f l) h; simpa using this
+
+@[simp] lemma treeNodeAtLevel_finite (T : LocallyFinite) (n : ℕ) :
+  Set.Finite (T.val.treeNodeAtLevel n) := by
+  simp [treeNodeAtLevel]; by_cases n = 0
+  · simp [*]
+  · simp [*]; apply Set.Finite.diff; exact T.property n
+
+noncomputable instance (T : LocallyFinite) (n : ℕ) : Fintype ↑(T.val.treeNodeAtLevel n) :=
+  @Fintype.ofFinite _ <| Set.finite_coe_iff.2 <| treeNodeAtLevel_finite T n
+
+noncomputable def generationSizeAtLevel (T : LocallyFinite) (n : ℕ) : ℕ :=
+  if n = 0 then 1 else ∑ (ν ∈ (T.val.treeNodeAtLevel (n - 1))), T.countChildren ν
 
 end LocallyFinite
 
 section RootedForest
 
-instance : Coe (WithBot (List ℕ)) (List ℕ) where
+instance : Coe (WithBot TreeNode) TreeNode where
   coe v := match v with
     | ⊥ => []
     | some v => v
 
-axiom bot_eq_some_nil : (⊥ : WithBot (List ℕ)) = some ([] : List ℕ)
+axiom bot_eq_some_nil : (⊥ : WithBot TreeNode) = some ([] : TreeNode)
 
-lemma exists_some (v : WithBot (List ℕ)) : ∃ l, v = some l := by
+lemma exists_some (v : WithBot TreeNode) : ∃ l, v = some l := by
   match v with
   | ⊥ => use []; rw [bot_eq_some_nil]
   | some l => use l
 
-def toRootedForest (T : RootedLabeledTree) : RootedForest (List ℕ)
+def toRootedForest (T : RootedLabeledTree) : RootedForest TreeNode
   (fun v => { i : ℕ // match T v with | ⊤ => True | some k => i < k }) where
   branch v i := (i : ℕ) :: v
   parent_child u v := ↑v ∈ T ∧ ∃ m : ℕ, v = m :: u
@@ -1266,18 +1419,18 @@ def toRootedForest (T : RootedLabeledTree) : RootedForest (List ℕ)
     · intro h; obtain ⟨hvT, m, hmuv⟩ := h; use m; match h : T u with
       | ⊤ => simp [*]
       | some k =>
-        have := h ▸ (show T.count_children u = T u from by simp [instFunLikeListNatENat])
-          ▸ count_children_ge_iff.1 <| (WithBot.coe_inj.1 hmuv) ▸ hvT
+        have := h ▸ (show T.countChildren u = T u from by simp [instFunLikeTreeNodeENat])
+          ▸ countChildren_ge_iff.1 <| (WithBot.coe_inj.1 hmuv) ▸ hvT
         conv at this => left; rw [(show (m : WithTop ℕ) + 1 = ↑(m + 1) from by simp)]
         have := ENat.coe_le_coe.1 this; simp [*]; omega
     · intro h; obtain ⟨m, hmT, h'⟩ := h; match h : T u with
-      | ⊤ => use WithBot.coe_inj.1 h' ▸ count_children_eq_top_iff.2 h m, m; simp [*]
+      | ⊤ => use WithBot.coe_inj.1 h' ▸ countChildren_eq_top_iff.2 h m, m; simp [*]
       | some k =>
         simp [*] at hmT; have := ENat.coe_le_coe.2 (show m + 1 ≤ k from by omega)
         conv at this => left; simp
         conv at this => right; rw [←ENat.some_eq_coe, ←WithTop.some_eq_coe k, ←h,
-          ←(show T.count_children u = T u from by simp [instFunLikeListNatENat])]
-        use (WithBot.coe_inj.1 h') ▸ count_children_ge_iff.2 this, m; simp [*]
+          ←(show T.countChildren u = T u from by simp [instFunLikeTreeNodeENat])]
+        use (WithBot.coe_inj.1 h') ▸ countChildren_ge_iff.2 this, m; simp [*]
   root_no_parent := by simp
   acyclic := by
     simp; intro u v w; cases u <;> cases v <;> simp_all [bot_eq_some_nil]
@@ -1299,90 +1452,96 @@ end RootedLabeledTree
 section GW
 variable {Ω : Type*} [mΩ : MeasurableSpace Ω]
 
-structure ListNProcess (Ω : Type*) [mΩ : MeasurableSpace Ω] (E : Type*) where
-  toFun : List ℕ → Ω → E
+variable (ℙ : MeasureTheory.Measure Ω) (L : PMF ℕ) in
+class GaltonWatson where
+  toField (ω : Ω) : RootedLabeledTree.LocallyFinite
+  toProcess : TreeNode → Ω → ℕ
+  toProcess_def : toProcess = fun ν ω => toField ω ν
+  indep : ProbabilityTheory.iIndepFun (fun ν ↦ toProcess ν) ℙ
+  -- `sameLaw` requires `toProcess ν` to be AEMeasurable
+  sameLaw : ∀ ν, ℙ.map (toProcess ν) = L.toMeasure
 
-namespace ListNProcess
-variable {Ω : Type*} [mΩ : MeasurableSpace Ω] {E : Type*}
+variable {ℙ : MeasureTheory.Measure Ω} {L : PMF ℕ} (GW : GaltonWatson ℙ L)
 
-instance instFunLike : FunLike (ListNProcess Ω E) (List ℕ) (Ω → E) where
-  coe := toFun
-  coe_injective' f g h := by cases f; cases g; congr
-
-@[simp] def sizeAfterLayer (L : ListNProcess Ω ℕ) (x : List ℕ) (ω : Ω) (n : ℕ) : ℕ :=
-  match n with
-  | 0 => 1
-  | n + 1 =>
-    let M := sizeAfterLayer L x ω n
-    ∑ (f : Fin n → Fin (M + 1)),
-      let seq := List.ofFn fun i => (f i).val;
-      if seq.sum < M then L (seq ++ x) ω else 0
-
-variable (L : ListNProcess Ω ℕ) (x : List ℕ) (ω : Ω) (n : ℕ)
-
-@[simp] lemma sizeAfterLayer_zero : sizeAfterLayer L x ω 0 = 1 := by simp
-
-@[simp] lemma sizeAfterLayer_one : sizeAfterLayer L x ω 1 = L x ω := by simp
-
-@[simp] def sizeBefore (L : ListNProcess Ω ℕ) (x : List ℕ) (ω : Ω) : ℕ :=
-  match x with
-  | [] => 0
-  | m :: x' => m + ∑ n : Fin x'.length, ∑ n' : Fin (x'.get n),
-      sizeAfterLayer L (n' :: (x'.drop (x'.length - n))) ω (x'.length - n + 1)
-
-end ListNProcess
-
-variable (ℙ : MeasureTheory.Measure Ω) (p : PMF ℕ) -- by volume_tac?
-
-class GaltonWatsonListN where
-  toProcess : ListNProcess Ω ℕ
-  toField (ω : Ω) := RootedForest.Standard (fun x ↦ toProcess x ω)
-  indep : ProbabilityTheory.iIndepFun (fun v ↦ toProcess v) ℙ
-  sameLaw : ∀ v, ℙ.map (toProcess v) = p.toMeasure ∨ ℙ.map (toProcess v) = 0
-
-class GaltonWatson (V : Type*) extends GaltonWatsonListN ℙ p where
-  labelling : Ω → List ℕ → WithBot V
-  labelling_inj : ∀ ω, Function.Injective <| labelling ω
-
-class GaltonWatsonNN extends GaltonWatson ℙ p (ℕ × ℕ) where
-  labelling_def : labelling = fun ω x => match x with
-    | [] => ⊥
-    | m :: x' => (x'.length, ListNProcess.sizeBefore toProcess (m :: x') ω)
+noncomputable def measureGaltonWatson := ℙ.map GW.toField
 
 namespace GaltonWatson
-variable {Ω : Type*} [mΩ : MeasurableSpace Ω] {p : PMF ℕ} {ℙ : MeasureTheory.Measure Ω} {V : Type*}
-  (GW : GaltonWatson ℙ p V)
 
-def generationSize : ℕ → Ω → ℕ := fun n ω => GW.toProcess.sizeAfterLayer [] ω n
+variable (ν : TreeNode)
+
+open MeasureTheory Measure RootedLabeledTree LocallyFinite
+
+@[simp] instance toProcess_aemeasurable : AEMeasurable (GW.toProcess ν) ℙ := by
+  have := GW.sameLaw ν; simp [map] at this; split_ifs at this
+  · assumption
+  · exact False.elim <| Ne.symm (IsProbabilityMeasure.ne_zero L.toMeasure) this
+
+@[simp] lemma toProcess_eq_countChildren :
+  (fun ω => (GW.toField ω).countChildren ν) = GW.toProcess ν := by
+  ext ω; simp [toProcess_def, RootedLabeledTree.LocallyFinite.instFunLikeTreeNodeNat]
+
+noncomputable def processGenerationSize : ℕ → Ω → ℕ :=
+  fun n ω => (GW.toField ω).generationSizeAtLevel n
+
+lemma processGenerationSize_eq₁ : GW.processGenerationSize = fun n ω =>
+  ∑' (ν : {ν : TreeNode // ν.length = n}), GW.toProcess ν ω := by
+  unfold processGenerationSize; ext n ω
+  -- have := tsum_fintype
+  -- have := tsum_eq_finsum
+  -- have := Finset.sum
+  -- have := sum_eq_tsum_indicator
+  -- have := Set.Finite.subtypeEquivToFinset
+  -- have := Equiv.sum_comp
+  -- have := summable_of_finite_support
+  -- have := aemeasurable_of_tendsto_metrizable_ae
+  -- have := aemeasurable_of_tendsto_metrizable_ae'
+
+  sorry
+
+@[simp] lemma processGenerationSize_zero : GW.processGenerationSize 0 = 1 := by
+  unfold processGenerationSize; simp [generationSizeAtLevel]; rfl
+
+@[simp] lemma processGenerationSize_one : GW.processGenerationSize 1 = GW.toProcess [] := by
+  unfold processGenerationSize; simp [generationSizeAtLevel, treeNodeAtLevel]
+
+#check List.aemeasurable_sum
+#check List.aemeasurable_fun_sum
+#check aemeasurable_of_tendsto_metrizable_ae
+#check aemeasurable_of_tendsto_metrizable_ae'
+#check ENNReal.aemeasurable_of_tendsto
+#check ENNReal.aemeasurable_of_tendsto'
+
+@[simp] instance processGenerationSize_aemeasurable (n : ℕ) : AEMeasurable (GW.processGenerationSize n) ℙ := by
+  match n with
+  | 0 => simp; exact aemeasurable_const
+  | 1 => simp
+  | n + 2 =>
+    unfold processGenerationSize; simp [generationSizeAtLevel]
+    exact @Finset.aemeasurable_fun_sum ℕ _ _ _ _ _ _ _ _ (by
+      exact ((↑(GW.toField ℙ L ω)).treeNodeAtLevel (n + 1)).toFinset) (fun ν _ =>
+      toProcess_eq_countChildren GW ν ▸ toProcess_aemeasurable GW ν)
 
 end GaltonWatson
-end GW
 
 section ProbabilityGeneratingFunction
 
-noncomputable def pgf (p : PMF ℕ) (s : ENNReal) : ENNReal := ∑' k, (p k) * s ^ k
+noncomputable def pgf (L : PMF ℕ) (s : ENNReal) : ENNReal := ∑' k, (L k) * s ^ k
 
-lemma pgf_zero (p : PMF ℕ) : pgf p 0 = p 0 := by
+lemma pgf_zero (L : PMF ℕ) : pgf L 0 = L 0 := by
   rw [pgf, ←@Summable.sum_add_tsum_nat_add' _ _ _ _ _ _ 1 ENNReal.summable]; simp
 
 end ProbabilityGeneratingFunction
 
-section GW
 namespace GaltonWatson
-variable {Ω : Type*} [mΩ : MeasurableSpace Ω] {p : PMF ℕ} {ℙ : MeasureTheory.Measure Ω} {V : Type*}
-  (GW : GaltonWatson ℙ p V)
 
-def eventExtinction := { ω | ∃ n, GW.generationSize n ω = 0 }
+def eventExtinction := { ω | ∃ n, GW.processGenerationSize n ω = 0 }
 
-@[simp] def toFamilyTree := GW.toField
+-- lemma eventExtinction_ofAEIsTree :
+--   GW.eventExtinction = { ω | ∃ n, GW.toProcess.forestSize_atMostK_atLevel 0 n ω = 0 } := sorry
 
-@[simp] def toGenealogicalTree := GW.toField
+def eventExtinction_measurable : MeasurableSet (GW.eventExtinction) := by
 
-lemma eventExtinction_ofAEIsTree (GW : GaltonWatson ℙ p V) (hGW : GW.toForest_aeIsTree') :
-  GW.eventExtinction = { ω | ∃ n, GW.toProcess.forestSize_atMostK_atLevel 0 n ω = 0 } := sorry
-
-def eventExtinction_measurable (GW : GaltonWatson ℙ p V) :
-  MeasurableSet (GW.eventExtinction) := sorry
+  sorry
 
 end GaltonWatson
 end GW
