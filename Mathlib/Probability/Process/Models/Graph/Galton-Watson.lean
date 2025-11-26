@@ -3,7 +3,7 @@ import Mathlib.Combinatorics.SimpleGraph.Connectivity.Subgraph
 import Mathlib.Topology.MetricSpace.Ultra.Basic
 import Mathlib.Probability.Independence.Basic
 import Mathlib.Probability.ProbabilityMassFunction.Basic
--- import Mathlib.Topology.Instances.ENat
+import Mathlib.Topology.Instances.ENat
 
 variable (V : Type*) (κ : WithBot V → Type*)
 
@@ -129,7 +129,8 @@ open SimpleGraph Walk List in
     rw [←List.cons_head_tail (show q.support ≠ [] from by simp)] at hq
     simp [List.isChain_cons] at hq
     have : p.support.getLast (show p.support ≠ [] from by simp) = v := by simp
-    simp [Descend, support_append, List.isChain_append, List.getLast?_eq_getLast, *]; exact hq.left
+    simp [Descend, support_append, List.isChain_append, List.getLast?_eq_some_getLast, *]
+    exact hq.left
 
 @[simp] lemma descend_copy {u v u' v' : WithBot V} {p : F.toSimpleGraph.Walk u v}
   {hu : u = u'} {hv : v = v'} : Descend (p.copy hu hv) → Descend p := by simp [Descend]
@@ -687,7 +688,7 @@ def nilRootedLabeledTree := generate {[]} (by simp)
   nilRootedLabeledTree_aux, by simp⟩  := by simp [nilRootedLabeledTree, generate]
 
 @[simp] lemma truncation_zero {T : RootedLabeledTree} : T.truncation 0 = nilRootedLabeledTree := by
-  rw [nilRootedLabeledTree_eq, truncation]; apply Subtype.eq
+  rw [nilRootedLabeledTree_eq, truncation]; apply Subtype.ext
   simp; ext; constructor <;> simp <;> aesop
 
 lemma truncation_height_at_most {T : RootedLabeledTree} (n : ℕ) :
@@ -1563,8 +1564,9 @@ instance : MeasurableSpace LocallyFinite := borel LocallyFinite
 instance : Coe LocallyFinite RootedLabeledTree where
   coe T := T.val
 
-@[simp] lemma countChildren_finite (T : LocallyFinite) (ν : TreeNode) :
-  countChildren ↑T ν ≠ ⊤ := by
+variable (T : LocallyFinite) (ν : TreeNode) (n : ℕ)
+
+@[simp] lemma countChildren_ne_top : countChildren ↑T ν ≠ ⊤ := by
   simp [←countChildren_eq_top_iff]
   set S := T.val.truncation (ν.length + 1) with hS
   have hT := (@Nat.card_eq_fintype_card _
@@ -1575,21 +1577,26 @@ instance : Coe LocallyFinite RootedLabeledTree where
   let F (m : Fin (n + 1)) : S.val.Elem := ⟨m :: ν, @less_mem S n _ ν h (by omega)⟩
   have := Fintype.card_le_of_injective F (by simp [Function.Injective, F]; omega); simp [hn] at this
 
-noncomputable def countChildren (T : LocallyFinite) (ν : TreeNode) : ℕ :=
-  (RootedLabeledTree.countChildren ↑T ν).toNat
+@[simp] lemma countChildren_lt_top : countChildren ↑T ν < ⊤ := by
+  rw [WithTop.lt_top_iff_ne_top]; exact countChildren_ne_top T ν
+
+noncomputable def countChildren : ℕ := (T.val.countChildren ν).lift (by simp)
+
+lemma countChildren_eq_toNat : T.countChildren ν = (T.val.countChildren ν).toNat
+  := ENat.lift_eq_toNat_of_lt_top (by simp)
 
 @[ext] def ext_of_countChildren (T1 T2 : LocallyFinite)
   (h : ∀ l, T1.countChildren l = T2.countChildren l) : T1 = T2 :=
   Subtype.coe_inj.1 <| RootedLabeledTree.ext_of_countChildren _ _ (by
     intro l; specialize h l; simp [countChildren] at h
-    exact @ENat.coe_toNat (T1.val.countChildren l) (by simp)
-      ▸ h ▸ @ENat.coe_toNat (T2.val.countChildren l) (by simp))
+    exact @ENat.coe_lift (T1.val.countChildren l) (by simp)
+      ▸ h ▸ @ENat.coe_lift (T2.val.countChildren l) (by simp))
 
-@[simp] lemma countChildren_eq_zero_of_not_mem (T : LocallyFinite) (v : TreeNode) (hv : v ∉ T) :
-  T.countChildren v = 0 := by
-  simp [countChildren, RootedLabeledTree.countChildren]; left
+@[simp] lemma countChildren_eq_zero_of_not_mem (hv : ν ∉ T) :
+  T.countChildren ν = 0 := by
+  simp [countChildren, RootedLabeledTree.countChildren, ENat.lift, WithTop.untop_eq_iff]
   have {m : ENat} (hm : m ≤ 0) : m = 0 := by simp only [nonpos_iff_eq_zero] at hm; exact hm
-  apply this; apply (@iSup₂_le_iff (WithTop ℕ) ℕ (fun m => m :: v ∈ T) _).2; intro m hm
+  apply this; apply (@iSup₂_le_iff (WithTop ℕ) ℕ (fun m => m :: ν ∈ T) _).2; intro m hm
   simp; exact hv <| @tail_mem _ _ _ hm
 
 noncomputable instance : FunLike LocallyFinite TreeNode ℕ where
@@ -1597,19 +1604,33 @@ noncomputable instance : FunLike LocallyFinite TreeNode ℕ where
   coe_injective' T1 T2 h := by
     ext l; simp at h; have := congrArg (fun f => f l) h; simpa using this
 
-@[simp] lemma setOfLevel_finite (T : LocallyFinite) (n : ℕ) :
+@[simp] lemma setOfLevel_finite :
   Set.Finite (T.val.setOfLevel n) := by
   simp [setOfLevel]; by_cases n = 0
   · simp [*]
   · simp [*]; apply Set.Finite.diff; exact T.property n
 
-noncomputable instance (T : LocallyFinite) (n : ℕ) : Fintype ↑(T.val.setOfLevel n) :=
+noncomputable instance : Fintype ↑(T.val.setOfLevel n) :=
   @Fintype.ofFinite _ <| Set.finite_coe_iff.2 <| setOfLevel_finite T n
+
+section
+
+noncomputable def _root_.NNReal.toNat := FloorSemiring.floor (α := NNReal)
+
+noncomputable def _root_.ENNReal.toNat := fun x : ENNReal => x.toNNReal.toNat
+
+noncomputable def _root_.ENNReal.toENat := fun x : ENNReal => match x with
+  | ⊤ => (⊤ : ENat)
+  | some x => x.toNat
+
+end
+
+noncomputable def generationSizeAtLevel' := (T.val.generationSizeAtLevel' n).toNat
 
 noncomputable def generationSizeAtLevel (T : LocallyFinite) :=
   tsumOfLevel T.countChildren
 
-lemma generationSizeAtLevel_eq_tsum_sum (T : LocallyFinite) (n : ℕ) :
+lemma generationSizeAtLevel_eq_tsum_sum :
   T.generationSizeAtLevel n
   = ∑' m, ∑ ν : Set.seqDiff (setOfLengthOfValAtMost n) m, ↑(T.countChildren ↑ν)
   := tsumOfLevel_eq_tsum_sum' _ n (by sorry) (by
@@ -1628,6 +1649,8 @@ lemma generationSizeAtLevel_eq_tsum_sum (T : LocallyFinite) (n : ℕ) :
       -- set s : Set S := ⋃ v : T.val.setOfLevel n, {⟨n, v.val, by sorry⟩}
       -- use
     )
+
+#check aemeasurable_coe_nnreal_ennreal_iff
 
 end LocallyFinite
 
@@ -1717,6 +1740,14 @@ open MeasureTheory Measure RootedLabeledTree LocallyFinite
 
 noncomputable def processGenerationSize : ℕ → Ω → ℕ :=
   fun n ω => (GW.toField ω).generationSizeAtLevel n
+
+noncomputable def processGenerationSize' : ℕ → Ω → ENNReal :=
+  fun n ω => (GW.toField ω).val.generationSizeAtLevel' n
+
+@[simp] instance processGenerationSize'_aemeasurable (n : ℕ) :
+  AEMeasurable (GW.processGenerationSize' n) ℙ := by
+  unfold processGenerationSize';
+  sorry
 
 lemma processGenerationSize_eq₁ : GW.processGenerationSize = fun n ω =>
   ∑' (ν : {ν : TreeNode // ν.length = n}), GW.toProcess ν ω := by
