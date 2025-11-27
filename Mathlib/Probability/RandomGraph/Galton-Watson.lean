@@ -1,4 +1,4 @@
-import Mathlib.Probability.Process.Models.Graph.RootedLabeledTree
+import Mathlib.Probability.RandomGraph.RootedLabeledTree
 import Mathlib.Probability.Independence.Basic
 import Mathlib.Probability.ProbabilityMassFunction.Basic
 
@@ -107,3 +107,6 @@ def eventExtinction_measurable : MeasurableSet (GW.eventExtinction) := by
 
 end GaltonWatson
 end GW
+
+
+#check Set.finite_iUnion
