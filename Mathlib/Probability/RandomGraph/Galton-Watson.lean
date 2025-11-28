@@ -2,7 +2,6 @@ import Mathlib.Probability.RandomGraph.RootedLabeledTree
 import Mathlib.Probability.Independence.Basic
 import Mathlib.Probability.ProbabilityMassFunction.Basic
 
-
 section GW
 variable {Ω : Type*} [mΩ : MeasurableSpace Ω]
 
@@ -37,13 +36,17 @@ open MeasureTheory Measure RootedLabeledTree LocallyFinite
 noncomputable def processGenerationSize : ℕ → Ω → ℕ :=
   fun n ω => (GW.toField ω).generationSizeAtLevel n
 
-noncomputable def processGenerationSize' : ℕ → Ω → ENNReal :=
-  fun n ω => (GW.toField ω).val.generationSizeAtLevel' n
+@[simp] lemma processGenerationSize_ennreal_aemeasurable (n : ℕ) :
+  AEMeasurable (fun ω => (GW.processGenerationSize n ω : ENNReal)) ℙ := by
+  simp [processGenerationSize, generationSizeAtLevel_def, generationSizeAtLevel_eq_tsum_sum]
 
-@[simp] instance processGenerationSize'_aemeasurable (n : ℕ) :
-  AEMeasurable (GW.processGenerationSize' n) ℙ := by
-  unfold processGenerationSize';
+
   sorry
+
+@[simp] lemma processGenerationSize_aemeasurable (n : ℕ) :
+  AEMeasurable (GW.processGenerationSize n) ℙ := by apply AEMeasurable.ennreal_ofNat_toNat; simp
+
+#check ENNReal.measurable_of_measurable_nnreal
 
 lemma processGenerationSize_eq₁ : GW.processGenerationSize = fun n ω =>
   ∑' (ν : {ν : TreeNode // ν.length = n}), GW.toProcess ν ω := by

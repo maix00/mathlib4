@@ -797,18 +797,18 @@ variable {T : RootedLabeledTree}
 
 -- ## generationSizeAtLevel
 
-noncomputable def generationSizeAtLevel' (T : RootedLabeledTree) :=
+noncomputable def generationSizeAtLevel (T : RootedLabeledTree) :=
   tsumOfLevel (ENat.toENNReal ∘ T.countChildren)
 
-lemma generationSizeAtLevel'_eq_tsum_sum (T : RootedLabeledTree) (n : ℕ) :
-  T.generationSizeAtLevel' n
+lemma generationSizeAtLevel_eq_tsum_sum (T : RootedLabeledTree) (n : ℕ) :
+  T.generationSizeAtLevel n
   = ∑' m, ∑ ν : Set.seqDiff (setOfLevelOfValAtMost n) m, ↑(T.countChildren ↑ν)
   := tsumOfLevel_eq_tsum_sum' _ n (by simp) (by simp)
 
 -- instance _root_.ENat.instTopologicalSpace : TopologicalSpace ENat :=
 --   TopologicalSpace.induced ENat.toENNReal inferInstance
 
--- noncomputable def generationSizeAtLevel' (T : RootedLabeledTree) :=
+-- noncomputable def generationSizeAtLevel (T : RootedLabeledTree) :=
 --   tsumOfLevel T.countChildren
 
 -- #check ENNReal.aemeasurable_of_tendsto'
@@ -1044,6 +1044,18 @@ noncomputable instance : FunLike LocallyFinite TreeNode ℕ where
 noncomputable instance : Fintype ↑(T.val.setOfLevel n) :=
   @Fintype.ofFinite _ <| Set.finite_coe_iff.2 <| setOfLevel_finite T n
 
+-- def setOfLevel_ofLevel : Set ↑(TreeNode.setOfLevel n) := {v | v.val ∈ T.val.setOfLevel n}
+
+-- @[simp] lemma setOfLevel_finite_ofLevel : Set.Finite (T.setOfLevel_ofLevel n) := by
+--   simp [setOfLevel_ofLevel]
+--   -- apply Set.finite_mem_finset
+--   sorry
+
+-- noncomputable instance : Fintype ↑(T.setOfLevel_ofLevel n) := by
+--   simp [setOfLevel_ofLevel]
+--   -- have := Subtype.v
+--   sorry
+
 section
 
 noncomputable def _root_.NNReal.toNat := FloorSemiring.floor (α := NNReal)
@@ -1054,86 +1066,194 @@ noncomputable def _root_.ENNReal.toENat := fun x : ENNReal => match x with
   | ⊤ => (⊤ : ENat)
   | some x => x.toNat
 
+-- instance _root_.ENat.instTopologicalSpace : TopologicalSpace ENat :=
+--   TopologicalSpace.induced ENat.toENNReal inferInstance
+
+-- #check EMetricSpace
+
+-- theorem _root_.ENat.isEmbedding_coe : Topology.IsEmbedding ((↑) : ℕ → ENat) := by sorry
+  -- ENat.coe_strictMono.isEmbedding_of_ordConnected <| by rw [range_coe']; exact ordConnected_Iio
+
+-- @[fun_prop]
+-- theorem _root_.ENat.continuous_coe : Continuous ((↑) : ℕ → ENat) :=
+--   ENat.isEmbedding_coe.continuous
+
+-- @[measurability]
+-- theorem _root_.ENat.measurable_coe_nat_enat : Measurable ((↑) : ℕ → ENat) :=
+--   ENat.continuous_coe.measurable
+
+@[simp] lemma _root_.NNReal.ofNat_toNat (n : ℕ) : (n : NNReal).toNat = n := by
+  simp [NNReal.toNat, FloorSemiring.floor]
+
+@[simp] lemma _root_.ENNReal.ofNat_toNat (n : ℕ) : (n : ENNReal).toNat = n := by
+  simp [ENNReal.toNat]
+
+@[simp] lemma _root_.ENNReal.ofNat_toENat (n : ℕ) : (n : ENNReal).toENat = n := by
+  simp [ENNReal.toENat]
+
+@[simp] lemma _root_.ENNReal.ofENat_toENat (n : ENat) : (n : ENNReal).toENat = n := by
+  cases n <;> simp [ENNReal.toENat]
+
+@[measurability]
+lemma _root_.NNReal.measurable_toNat : Measurable NNReal.toNat := by
+  apply measurable_of_isOpen; simp only [isOpen_discrete, forall_const]; intro s
+  rw [←Set.iUnion_of_singleton_coe s, Set.preimage_iUnion]
+  apply MeasurableSet.iUnion; intro n
+  simp only [NNReal.toNat, FloorSemiring.floor, Set.preimage, Set.mem_singleton_iff]
+  conv => congr; congr; ext r; rw [Nat.floor_eq_iff r.property]
+  exact measurableSet_Ico (a := ((n : ℕ) : NNReal)) (b := ((n : ℕ) : NNReal) + 1)
+
+-- lemma _root_.ENNReal.measurable_toENat : Measurable ENNReal.toENat := by
+--   apply measurable_of_measurable_on_compl_singleton ⊤
+--   apply MeasurableEquiv.ennrealEquivNNReal.symm.measurable_comp_iff.1
+--   have : Measurable fun p : NNReal => (p : ENNReal).toENat := by
+--     conv => congr; ext p; simp only [ENNReal.toENat]
+
+--     apply NNReal.measurable_toNat.comp
+--     sorry
+--   exact this
+
+variable {α : Type*} {mα : MeasurableSpace α} {μ : MeasureTheory.Measure α}
+
+lemma _root_.Measurable.nnreal_toNat {f : α → NNReal} (hf : Measurable f) :
+  Measurable fun x => (f x).toNat := NNReal.measurable_toNat.comp hf
+
+lemma _root_.AEMeasurable.nnreal_toNat {f : α → NNReal} (hf : AEMeasurable f μ) :
+  AEMeasurable (fun x => (f x).toNat) μ := NNReal.measurable_toNat.comp_aemeasurable hf
+
+lemma _root_.Measurable.ennreal_toNat {f : α → ENNReal} (hf : Measurable f) :
+  Measurable fun x => (f x).toNat := NNReal.measurable_toNat.comp <| Measurable.ennreal_toNNReal hf
+
+lemma _root_.AEMeasurable.ennreal_toNat {f : α → ENNReal} (hf : AEMeasurable f μ) :
+  AEMeasurable (fun x => (f x).toNat) μ :=
+  NNReal.measurable_toNat.comp_aemeasurable <| AEMeasurable.ennreal_toNNReal hf
+
+-- lemma _root_.Measurable.ennreal_toENat {f : α → ENNReal} (hf : Measurable f) :
+--   Measurable fun x => (f x).toENat := ENNReal.measurable_toENat.comp hf
+
+-- lemma _root_.AEMeasurable.ennreal_toENat {f : α → ENNReal} (hf : AEMeasurable f μ) :
+--   AEMeasurable (fun x => (f x).toENat) μ := ENNReal.measurable_toENat.comp_aemeasurable hf
+
+-- lemma _root_.Measurable.ennreal_ofENat_toENat {f : α → ENat}
+--   (hf : Measurable fun x => (f x : ENNReal)) : Measurable f := by
+--   rw [show f = fun x => (f x : ENNReal).toENat from by simp]; exact Measurable.ennreal_toENat hf
+
+-- lemma _root_.AEMeasurable.ennreal_ofENat_toENat {f : α → ENat}
+--   (hf : AEMeasurable (fun x => (f x : ENNReal)) μ) : AEMeasurable f μ := by
+--   rw [show f = fun x => (f x : ENNReal).toENat from by simp]; exact AEMeasurable.ennreal_toENat hf
+
+lemma _root_.Measurable.ennreal_ofNat_toNat {f : α → ℕ}
+  (hf : Measurable fun x => (f x : ENNReal)) : Measurable f := by
+  rw [show f = fun x => (f x : ENNReal).toNat from by simp]; exact Measurable.ennreal_toNat hf
+
+lemma _root_.AEMeasurable.ennreal_ofNat_toNat {f : α → ℕ}
+  (hf : AEMeasurable (fun x => (f x : ENNReal)) μ) : AEMeasurable f μ := by
+  rw [show f = fun x => (f x : ENNReal).toNat from by simp]; exact AEMeasurable.ennreal_toNat hf
+
 end
 
-noncomputable def generationSizeAtLevel' := (T.val.generationSizeAtLevel' n).toNat
+-- noncomputable def generationSizeAtLevel := (T.val.generationSizeAtLevel n).toNat
 
 noncomputable def generationSizeAtLevel (T : LocallyFinite) :=
   tsumOfLevel T.countChildren
 
-lemma generationSizeAtLevel_eq_tsum_sum :
-  T.generationSizeAtLevel n
-  = ∑' m, ∑ ν : Set.seqDiff (setOfLevelOfValAtMost n) m, ↑(T.countChildren ↑ν)
-  := tsumOfLevel_eq_tsum_sum' _ n (by sorry) (by
-    by_cases h : n = 0
-    · subst n; simp only [Summable, HasSum, SummationFilter.unconditional_filter, nhds_discrete,
-      Filter.tendsto_pure, Filter.eventually_atTop, ge_iff_le, Finset.le_eq_subset]
-      rw [setOfLevelOfValAtMost_zero_seqDiff]
-      use T.countChildren [], {⟨0, [], by simp⟩}; intro s' hs
-      set S := @Sigma ℕ fun m ↦ ↑((fun m ↦ if m = 0 then {[]} else (∅ : Set (List ℕ))) m) with hS
-      simp at hS
-      sorry
-    · sorry
-      -- simp [Summable, HasSum]
-      -- use ∑ v : T.val.setOfLevel n, T.countChildren v
-      -- set S := @Sigma ℕ fun m ↦ ↑(Set.seqDiff (setOfLevelOfValAtMost n) m)
-      -- set s : Set S := ⋃ v : T.val.setOfLevel n, {⟨n, v.val, by sorry⟩}
-      -- use
-    )
+private lemma generationSizeAtLevel_def_aux_1 (T : LocallyFinite) (n : ℕ) :
+  T.generationSizeAtLevel n = ∑ v ∈ Finset.subtype (fun ν ↦ ν.length = n)
+  (T.val.setOfLevel n).toFinset, T.countChildren ↑v := by
+  simp only [generationSizeAtLevel, tsumOfLevel]
+  have heq := @tsum_eq_sum ℕ (TreeNode.setOfLevel n) Nat.instAddCommMonoid instTopologicalSpaceNat
+    (fun v => T.countChildren ↑v) (SummationFilter.unconditional ↑(TreeNode.setOfLevel n)) _
+    (by simp [TreeNode.setOfLevel]; apply Finset.subtype; exact (T.val.setOfLevel n).toFinset) (by
+    simp; intro v hv hv'; exact countChildren_eq_zero_of_not_mem T v (by
+    by_contra h; have : v ∈ T.val.setOfLevel n := by
+      simp [RootedLabeledTree.setOfLevel, RootedLabeledTree.truncation]
+      simp [TreeNode.setOfLevel] at hv; by_cases n = 0
+      · simp [*]; exact h
+      · simp [*, (show n > n - 1 from by omega)]; exact h
+    contradiction))
+  simp [id_eq] at heq; exact heq
 
-#check aemeasurable_coe_nnreal_ennreal_iff
+private lemma generationSizeAtLevel_def_aux_2 (T : LocallyFinite) (n : ℕ) :
+  T.val.generationSizeAtLevel n = ∑ v ∈ Finset.subtype (fun ν ↦ ν.length = n)
+  (T.val.setOfLevel n).toFinset, T.val.countChildren ↑v := by
+  simp only [RootedLabeledTree.generationSizeAtLevel, tsumOfLevel, Function.comp_apply]
+  have heq := @tsum_eq_sum ENNReal (TreeNode.setOfLevel n) _ _
+    (fun v => T.countChildren ↑v) (SummationFilter.unconditional ↑(TreeNode.setOfLevel n)) _
+    (by simp [TreeNode.setOfLevel]; apply Finset.subtype; exact (T.val.setOfLevel n).toFinset) (by
+    simp; intro v hv hv'; exact countChildren_eq_zero_of_not_mem T v (by
+    by_contra h; have : v ∈ T.val.setOfLevel n := by
+      simp [RootedLabeledTree.setOfLevel, RootedLabeledTree.truncation]
+      simp [TreeNode.setOfLevel] at hv; by_cases n = 0
+      · simp [*]; exact h
+      · simp [*, (show n > n - 1 from by omega)]; exact h
+    contradiction))
+  simp [id_eq] at heq
+  have (n : ENat) (hn : n < ⊤) : n.lift hn = (n : ENNReal) := by
+    have (n : ℕ) : (n : ENat) = (n : ENNReal) := (by simp); rw [←this]; simp
+  conv at heq => left; simp [countChildren, this]
+  exact Eq.trans heq (by
+  simp only [countChildren]; conv => left; arg 2; ext; rw[this]
+  apply Eq.symm; exact @map_sum {v : TreeNode // v.length = n} ENat ENNReal _ _ _ _ _
+    ENat.toENNRealRingHom (fun v => T.val.countChildren ↑v)
+    (Finset.subtype (fun ν : TreeNode ↦ List.length ν = n) (T.val.setOfLevel n).toFinset))
+
+lemma generationSizeAtLevel_def (T : LocallyFinite) (n : ℕ) :
+  (T.generationSizeAtLevel n : ENNReal) = T.val.generationSizeAtLevel n := by
+  simp only [generationSizeAtLevel_def_aux_1, generationSizeAtLevel_def_aux_2, countChildren];
+  rw [←ENat.toENNReal_coe]; apply ENat.toENNReal_inj.2; simp only [Nat.cast_sum, ENat.coe_lift,
+    Finset.sum_subtype_eq_sum_filter]
 
 end LocallyFinite
 
-section RootedForest
+-- section RootedForest
 
-instance : Coe (WithBot TreeNode) TreeNode where
-  coe v := match v with
-    | ⊥ => []
-    | some v => v
+-- instance : Coe (WithBot TreeNode) TreeNode where
+--   coe v := match v with
+--     | ⊥ => []
+--     | some v => v
 
-axiom bot_eq_some_nil : (⊥ : WithBot TreeNode) = some ([] : TreeNode)
+-- axiom bot_eq_some_nil : (⊥ : WithBot TreeNode) = some ([] : TreeNode)
 
-lemma exists_some (v : WithBot TreeNode) : ∃ l, v = some l := by
-  match v with
-  | ⊥ => use []; rw [bot_eq_some_nil]
-  | some l => use l
+-- lemma exists_some (v : WithBot TreeNode) : ∃ l, v = some l := by
+--   match v with
+--   | ⊥ => use []; rw [bot_eq_some_nil]
+--   | some l => use l
 
-def toRootedForest (T : RootedLabeledTree) : RootedForest TreeNode
-  (fun v => { i : ℕ // match T v with | ⊤ => True | some k => i < k }) where
-  branch v i := (i : ℕ) :: v
-  parent_child u v := ↑v ∈ T ∧ ∃ m : ℕ, v = m :: u
-  parent_child_def u v := by
-    obtain ⟨u, hu⟩ := exists_some u; obtain ⟨v, hv⟩ := exists_some v; simp [*]; constructor
-    · intro h; obtain ⟨hvT, m, hmuv⟩ := h; use m; match h : T u with
-      | ⊤ => simp [*]
-      | some k =>
-        have := h ▸ (show T.countChildren u = T u from by simp [instFunLikeTreeNodeENat])
-          ▸ countChildren_ge_iff.1 <| (WithBot.coe_inj.1 hmuv) ▸ hvT
-        conv at this => left; rw [(show (m : WithTop ℕ) + 1 = ↑(m + 1) from by simp)]
-        have := ENat.coe_le_coe.1 this; simp [*]; omega
-    · intro h; obtain ⟨m, hmT, h'⟩ := h; match h : T u with
-      | ⊤ => use WithBot.coe_inj.1 h' ▸ countChildren_eq_top_iff.2 h m, m; simp [*]
-      | some k =>
-        simp [*] at hmT; have := ENat.coe_le_coe.2 (show m + 1 ≤ k from by omega)
-        conv at this => left; simp
-        conv at this => right; rw [←ENat.some_eq_coe, ←WithTop.some_eq_coe k, ←h,
-          ←(show T.countChildren u = T u from by simp [instFunLikeTreeNodeENat])]
-        use (WithBot.coe_inj.1 h') ▸ countChildren_ge_iff.2 this, m; simp [*]
-  root_no_parent := by simp
-  acyclic := by
-    simp; intro u v w; cases u <;> cases v <;> simp_all [bot_eq_some_nil]
-    · sorry
-    · sorry
-  loopless := by simp; intro u m; cases u <;> simp
-  wellfounded := sorry
-  IsOrigin v := match v with
-    | ⊥ => False
-    | some v => v.length = 1
-  isOrigin_def := by simp; sorry
-  root_bij := sorry
-  node_bij := sorry
+-- def toRootedForest (T : RootedLabeledTree) : RootedForest TreeNode
+--   (fun v => { i : ℕ // match T v with | ⊤ => True | some k => i < k }) where
+--   branch v i := (i : ℕ) :: v
+--   parent_child u v := ↑v ∈ T ∧ ∃ m : ℕ, v = m :: u
+--   parent_child_def u v := by
+--     obtain ⟨u, hu⟩ := exists_some u; obtain ⟨v, hv⟩ := exists_some v; simp [*]; constructor
+--     · intro h; obtain ⟨hvT, m, hmuv⟩ := h; use m; match h : T u with
+--       | ⊤ => simp [*]
+--       | some k =>
+--         have := h ▸ (show T.countChildren u = T u from by simp [instFunLikeTreeNodeENat])
+--           ▸ countChildren_ge_iff.1 <| (WithBot.coe_inj.1 hmuv) ▸ hvT
+--         conv at this => left; rw [(show (m : WithTop ℕ) + 1 = ↑(m + 1) from by simp)]
+--         have := ENat.coe_le_coe.1 this; simp [*]; omega
+--     · intro h; obtain ⟨m, hmT, h'⟩ := h; match h : T u with
+--       | ⊤ => use WithBot.coe_inj.1 h' ▸ countChildren_eq_top_iff.2 h m, m; simp [*]
+--       | some k =>
+--         simp [*] at hmT; have := ENat.coe_le_coe.2 (show m + 1 ≤ k from by omega)
+--         conv at this => left; simp
+--         conv at this => right; rw [←ENat.some_eq_coe, ←WithTop.some_eq_coe k, ←h,
+--           ←(show T.countChildren u = T u from by simp [instFunLikeTreeNodeENat])]
+--         use (WithBot.coe_inj.1 h') ▸ countChildren_ge_iff.2 this, m; simp [*]
+--   root_no_parent := by simp
+--   acyclic := by
+--     simp; intro u v w; cases u <;> cases v <;> simp_all [bot_eq_some_nil]
+--     · sorry
+--     · sorry
+--   loopless := by simp; intro u m; cases u <;> simp
+--   wellfounded := sorry
+--   IsOrigin v := match v with
+--     | ⊥ => False
+--     | some v => v.length = 1
+--   isOrigin_def := by simp; sorry
+--   root_bij := sorry
+--   node_bij := sorry
 
-end RootedForest
+-- end RootedForest
 
 end RootedLabeledTree
