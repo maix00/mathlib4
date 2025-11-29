@@ -44,8 +44,6 @@ structure _root_.RLTree where -- Rooted Labeled Tree
 
 attribute [simp] generate_refl non_empty
 
--- def _root_.RootedLabeledTree := {s // generateSet s = s ∧ s ≠ ∅}
-
 scoped[RLTree] notation "𝕋₀" => RLTree
 
 variable {T T1 T2 : 𝕋₀} {v : 𝕍}
@@ -53,21 +51,16 @@ variable {T T1 T2 : 𝕋₀} {v : 𝕍}
 @[ext] lemma ext_of_set (h : T1.set = T2.set) : T1 = T2 := by
   cases T1; cases T2; simp at h; cases h; rfl
 
-instance : Coe 𝕋₀ (Set 𝕍) where
+instance : FunLike 𝕋₀ 𝕍 Prop where
   coe T := T.set
-
--- instance : FunLike 𝕋₀ 𝕍 Prop where
---   coe T := T.set
---   coe_injective' T1 T2 h12 := by ext; simp [h12]
+  coe_injective' T1 T2 h12 := by ext; simp [h12]
 
 instance : Membership 𝕍 𝕋₀ where
   mem T l := l ∈ T.set
 
-lemma mem_iff : v ∈ T ↔ v ∈ T.set := ⟨by
-  intro h; exact h, by simp [instMembershipTreeNode]⟩
+lemma mem_iff : v ∈ T ↔ v ∈ T.set := ⟨by intro h; exact h, by simp [instMembershipTreeNode]⟩
 
-lemma set_eq_of_eq {T1 T2 : 𝕋₀} (h : T1 = T2) : T1.set = T2.set :=
-  congrArg @RLTree.set h
+lemma set_eq_of_eq {T1 T2 : 𝕋₀} (h : T1 = T2) : T1.set = T2.set := congrArg @RLTree.set h
 
 instance : HasSubset 𝕋₀ where
   Subset T1 T2 := T1.set ⊆ T2.set
@@ -75,12 +68,10 @@ instance : HasSubset 𝕋₀ where
 instance : LE 𝕋₀ where
   le := (· ⊆ ·)
 
+variable (s : Set 𝕍) {T : 𝕋₀}
+
 @[simp] lemma nil_generate : generateSet ∅ = ∅ := by
   ext; simp only [Set.mem_empty_iff_false, iff_false]; by_contra hv; induction hv <;> assumption
-
--- @[simp] lemma generateSet_eq_self_of_set : generateSet T.set = T.set := T.generate_refl
-
--- @[simp] lemma nonempty_of_set : T.set ≠ ∅ := T.non_empty
 
 lemma generateSet_mono : Monotone generateSet := by
   intro _ _ _; simp only [Set.le_eq_subset, Set.subset_def]; intro _ h; induction h with
@@ -88,11 +79,9 @@ lemma generateSet_mono : Monotone generateSet := by
   | tail => exact generateSet.tail _ _ ‹_›
   | less => exact generateSet.less _ _ ‹_› _ ‹_›
 
-lemma generateSet_subset (s : Set 𝕍) : s ⊆ generateSet s := by
-  intro _ _; exact generateSet.mem _ ‹_›
+lemma generateSet_subset : s ⊆ generateSet s := by intro _ _; exact generateSet.mem _ ‹_›
 
-lemma generateSet_proj (s : Set 𝕍) :
-  generateSet (generateSet s) = generateSet s := by
+lemma generateSet_proj : generateSet (generateSet s) = generateSet s := by
   ext; constructor
   · intro h; induction h with
       | mem => assumption
@@ -108,37 +97,36 @@ lemma generateSet_idempotent : @IsIdempotentElem _ ⟨Function.comp⟩ generateS
       | less => exact generateSet.less _ _ ‹_› _ ‹_›
   · intro; exact generateSet.mem _ ‹_›
 
-lemma nonempty_of_nonempty (s : Set 𝕍) (hs : s ≠ ∅) : generateSet s ≠ ∅ := by
+lemma nonempty_of_nonempty (hs : s ≠ ∅) : generateSet s ≠ ∅ := by
   obtain ⟨l, hv⟩ := not_not.1 <| not_imp_not.2 Set.not_nonempty_iff_eq_empty.1 hs
   apply not_imp_not.2 (@Set.not_nonempty_iff_eq_empty _ (generateSet s)).2; apply not_not.2
   exact ⟨l, generateSet.mem l hv⟩
 
-@[simp] lemma nil_mem {T : 𝕋₀} : [] ∈ T := by
+@[simp] lemma nil_mem : [] ∈ T := by
   obtain ⟨l, h⟩ := Set.nonempty_iff_ne_empty.2 T.non_empty; induction l with
   | nil => exact h
   | cons m v' ih => exact ih <| T.generate_refl ▸ generateSet.tail m v' <| T.generate_refl ▸ h
 
-@[simp] lemma tail_mem {T : 𝕋₀} {m : ℕ} {l : 𝕍} (h : m :: l ∈ T) : l ∈ T :=
+@[simp] lemma tail_mem {m : ℕ} {l : 𝕍} (h : m :: l ∈ T) : l ∈ T :=
   T.generate_refl ▸ generateSet.tail m l <| T.generate_refl ▸ mem_iff.1 h
 
-@[simp] lemma tail_mem' {T : 𝕋₀} {l : 𝕍} {h : l ∈ T} : l.tail ∈ T := by
+@[simp] lemma tail_mem' {l : 𝕍} {h : l ∈ T} : l.tail ∈ T := by
   cases l <;> grind [tail_mem]
 
-@[simp] lemma drop_mem {T : 𝕋₀} {l : 𝕍} {h : l ∈ T} {n : ℕ} :
+@[simp] lemma drop_mem {l : 𝕍} {h : l ∈ T} {n : ℕ} :
   l.drop n ∈ T := by
   induction n with
   | zero => simpa
   | succ n ih =>
     simp only [←@List.drop_drop _ 1 n l, List.drop_one]; exact @tail_mem' T (l.drop n) ih
 
-@[simp] lemma less_mem {T : 𝕋₀} {m n : ℕ} {l : 𝕍} (h : m :: l ∈ T)
+@[simp] lemma less_mem {m n : ℕ} {l : 𝕍} (h : m :: l ∈ T)
   (hnm : n ≤ m) : n :: l ∈ T :=  mem_iff.2 <| T.generate_refl ▸ generateSet.less m l
   (Eq.symm T.generate_refl ▸ mem_iff.1 h) n hnm
 
 -- ## generateTree
 
-def generateTree (s : Set 𝕍) (hs : s ≠ ∅) : 𝕋₀ :=
-  ⟨generateSet s, generateSet_proj s, nonempty_of_nonempty s hs⟩
+def generateTree (hs : s ≠ ∅) : 𝕋₀ := ⟨generateSet s, generateSet_proj s, nonempty_of_nonempty s hs⟩
 
 @[simp] lemma generateTree_set (T : 𝕋₀) : generateTree T.set T.non_empty = T := by
   simp [generateTree]
@@ -152,6 +140,18 @@ def rootTree := generateTree {[]} (by simp)
 
 @[simp] lemma rootTree_eq : rootTree = ⟨({[]} : Set 𝕍), rootTree_aux, by simp⟩  := by
   simp [rootTree, generateTree]
+
+instance : Bot 𝕋₀ where
+  bot := rootTree
+
+@[simp] lemma rootTree_bot : ⊥ = rootTree := rfl
+
+def univTree := generateTree Set.univ (by simp)
+
+instance : Top 𝕋₀ where
+  top := univTree
+
+@[simp] lemma univTree_top : ⊤ = univTree := rfl
 
 -- ## countChildren
 
@@ -312,8 +312,8 @@ def truncation (T : 𝕋₀) (n : ℕ) : 𝕋₀ := ⟨{v | ‖v‖ₕ ≤ n ∧
 
 scoped[RLTree] notation T "↾(" n ")" => @truncation T n
 
-@[simp] lemma truncation_zero : T↾(0) = rootTree := by
-  rw [rootTree_eq, truncation]; congr; simp; ext v ; constructor
+@[simp] lemma truncation_zero : T↾(0) = ⊥ := by
+  rw [rootTree_bot, rootTree_eq, truncation]; congr; simp; ext v ; constructor
   · intro h; rw [h.1]; rfl
   · intro h; simp [Set.mem_singleton_iff.1 h]
 
