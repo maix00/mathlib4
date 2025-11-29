@@ -9,7 +9,7 @@ scoped[TreeNode] notation "𝕍" => TreeNode
 namespace TreeNode
 
 instance : Coe 𝕍 (List ℕ) where
-  coe l := l
+  coe v := v
 
 scoped[TreeNode] notation "‖" v "‖ₕ" => List.length v
 
@@ -113,11 +113,11 @@ end Set
 
 namespace TreeNode
 
-def setOfLevel (n : ℕ) : Set 𝕍 := {ν | ν.length = n}
+def setOfLevel (n : ℕ) : Set 𝕍 := {v | v.length = n}
 
 scoped[TreeNode] notation "𝕍{" n "}" => setOfLevel n
 
-def setOfLevelAtMost (n : ℕ) : Set 𝕍 := {ν | ν.length ≤ n}
+def setOfLevelAtMost (n : ℕ) : Set 𝕍 := {v | v.length ≤ n}
 
 scoped[TreeNode] notation "𝕍{≤" n "}" => setOfLevelAtMost n
 
@@ -193,13 +193,13 @@ noncomputable instance instFintypeSetTreeNodeOfLengthTruncatedSeqDiff (n m : ℕ
 variable {α : Type*}
 
 noncomputable def tsumOfLevel [AddCommMonoid α] [TopologicalSpace α] (f : 𝕍 → α) (n : ℕ) : α
-  := ∑' ν : 𝕍{n}, f ν
+  := ∑' v : 𝕍{n}, f v
 
 lemma tsumOfLevel_eq_tsum_sum' [AddCommMonoid α] [TopologicalSpace α] [ContinuousAdd α] [T3Space α]
   (f : 𝕍 → α) (n : ℕ)
   (hf1 : ∀ m, Summable fun c => (fun v : @Sigma ℕ (fun m => 𝕍{n,m}) => f v.snd) ⟨m, c⟩)
   (hf2 : Summable fun v : @Sigma ℕ (fun m => 𝕍{n,m}) => f v.snd) :
-  tsumOfLevel f n = ∑' m : ℕ, ∑ ν : 𝕍{n,m}, f ν := by
+  tsumOfLevel f n = ∑' m : ℕ, ∑ v : 𝕍{n,m}, f v := by
   set seqDiff := Set.seqDiff <| setOfLevelOfValAtMost n with hseqDiff
   have h0 (m : ℕ) : ∑' v : seqDiff m, f v = ∑ v : seqDiff m, f v := by rw [tsum_eq_sum]; simp
   have h1 := @Summable.tsum_sigma' α ℕ _ _ _ _ (fun m => Set.Elem <| seqDiff m) (fun x => f x.2)
@@ -215,7 +215,7 @@ lemma tsumOfLevel_eq_tsum_sum' [AddCommMonoid α] [TopologicalSpace α] [Continu
 lemma tsumOfLevel_eq_tsum_sum [AddCommGroup α] [UniformSpace α] [IsUniformAddGroup α]
   [CompleteSpace α] [T0Space α] (f : 𝕍 → α) (n : ℕ)
   (hf : Summable fun v : @Sigma ℕ (fun m => 𝕍{n,m}) => f v.snd) :
-  tsumOfLevel f n = ∑' m : ℕ, ∑ ν : 𝕍{n,m}, f ν := by
+  tsumOfLevel f n = ∑' m : ℕ, ∑ v : 𝕍{n,m}, f v := by
   set seqDiff := Set.seqDiff <| setOfLevelOfValAtMost n with hseqDiff
   have h0 (m : ℕ) : ∑' v : seqDiff m, f v = ∑ v : seqDiff m, f v := by rw [tsum_eq_sum]; simp
   have h1 := @Summable.tsum_sigma α ℕ _ _ _ _ _ (fun m => Set.Elem <| seqDiff m) (fun x => f x.2)

@@ -33,9 +33,9 @@ open TreeNode ENNReal NNReal ENat
 namespace RLTree
 
 inductive generateSet (s : Set 𝕍) : Set 𝕍
-  | mem : (l : 𝕍) → s l → generateSet s l
-  | tail : (m : ℕ) → (l : 𝕍) → generateSet s (m :: l) → generateSet s l
-  | less : (m : ℕ) → (l : _) → generateSet s (m :: l) → (n : ℕ) → n ≤ m → generateSet s (n :: l)
+  | mem : (v : 𝕍) → s v → generateSet s v
+  | tail : (m : ℕ) → (v : 𝕍) → generateSet s (m :: v) → generateSet s v
+  | less : (m : ℕ) → (v : _) → generateSet s (m :: v) → (n : ℕ) → n ≤ m → generateSet s (n :: v)
 
 structure _root_.RLTree where -- Rooted Labeled Tree
   set : Set 𝕍
@@ -56,7 +56,7 @@ instance : FunLike 𝕋₀ 𝕍 Prop where
   coe_injective' T1 T2 h12 := by ext; simp [h12]
 
 instance : Membership 𝕍 𝕋₀ where
-  mem T l := l ∈ T.set
+  mem T v := v ∈ T.set
 
 lemma mem_iff : v ∈ T ↔ v ∈ T.set := ⟨by intro h; exact h, by simp [instMembershipTreeNode]⟩
 
@@ -98,30 +98,28 @@ lemma generateSet_idempotent : @IsIdempotentElem _ ⟨Function.comp⟩ generateS
   · intro; exact generateSet.mem _ ‹_›
 
 lemma nonempty_of_nonempty (hs : s ≠ ∅) : generateSet s ≠ ∅ := by
-  obtain ⟨l, hv⟩ := not_not.1 <| not_imp_not.2 Set.not_nonempty_iff_eq_empty.1 hs
+  obtain ⟨v, hv⟩ := not_not.1 <| not_imp_not.2 Set.not_nonempty_iff_eq_empty.1 hs
   apply not_imp_not.2 (@Set.not_nonempty_iff_eq_empty _ (generateSet s)).2; apply not_not.2
-  exact ⟨l, generateSet.mem l hv⟩
+  exact ⟨v, generateSet.mem v hv⟩
 
 @[simp] lemma nil_mem : [] ∈ T := by
-  obtain ⟨l, h⟩ := Set.nonempty_iff_ne_empty.2 T.non_empty; induction l with
+  obtain ⟨v, h⟩ := Set.nonempty_iff_ne_empty.2 T.non_empty; induction v with
   | nil => exact h
   | cons m v' ih => exact ih <| T.generate_refl ▸ generateSet.tail m v' <| T.generate_refl ▸ h
 
-@[simp] lemma tail_mem {m : ℕ} {l : 𝕍} (h : m :: l ∈ T) : l ∈ T :=
-  T.generate_refl ▸ generateSet.tail m l <| T.generate_refl ▸ mem_iff.1 h
+@[simp] lemma tail_mem {m : ℕ} {v : 𝕍} (h : m :: v ∈ T) : v ∈ T :=
+  T.generate_refl ▸ generateSet.tail m v <| T.generate_refl ▸ mem_iff.1 h
 
-@[simp] lemma tail_mem' {l : 𝕍} {h : l ∈ T} : l.tail ∈ T := by
-  cases l <;> grind [tail_mem]
+@[simp] lemma tail_mem' {v : 𝕍} {h : v ∈ T} : v.tail ∈ T := by cases v <;> grind [tail_mem]
 
-@[simp] lemma drop_mem {l : 𝕍} {h : l ∈ T} {n : ℕ} :
-  l.drop n ∈ T := by
+@[simp] lemma drop_mem {v : 𝕍} {h : v ∈ T} {n : ℕ} : v.drop n ∈ T := by
   induction n with
   | zero => simpa
   | succ n ih =>
-    simp only [←@List.drop_drop _ 1 n l, List.drop_one]; exact @tail_mem' T (l.drop n) ih
+    simp only [←@List.drop_drop _ 1 n v, List.drop_one]; exact @tail_mem' T (v.drop n) ih
 
-@[simp] lemma less_mem {m n : ℕ} {l : 𝕍} (h : m :: l ∈ T)
-  (hnm : n ≤ m) : n :: l ∈ T :=  mem_iff.2 <| T.generate_refl ▸ generateSet.less m l
+@[simp] lemma less_mem {m n : ℕ} {v : 𝕍} (h : m :: v ∈ T)
+  (hnm : n ≤ m) : n :: v ∈ T :=  mem_iff.2 <| T.generate_refl ▸ generateSet.less m v
   (Eq.symm T.generate_refl ▸ mem_iff.1 h) n hnm
 
 -- ## generateTree
@@ -138,7 +136,7 @@ def rootTree := generateTree {[]} (by simp)
   · intro h; induction h <;> first | assumption | contradiction
   · exact generateSet.mem _
 
-@[simp] lemma rootTree_eq : rootTree = ⟨({[]} : Set 𝕍), rootTree_aux, by simp⟩  := by
+@[simp] lemma rootTree_eq : rootTree = ⟨{[]}, rootTree_aux, by simp⟩  := by
   simp [rootTree, generateTree]
 
 instance : Bot 𝕋₀ where
@@ -154,16 +152,18 @@ instance : Top 𝕋₀ where
 @[simp] lemma univTree_top : ⊤ = univTree := rfl
 
 -- ## countChildren
+section
+variable {T T1 T2 : 𝕋₀} {v : 𝕍}
 
 noncomputable def countChildren (T : 𝕋₀) (v : 𝕍) : ℕ∞ :=
   (⨆ (m : ℕ) (_ : m :: v ∈ T), m + 1 : WithTop ℕ)
 
 scoped[RLTree] notation "#{" T ", " v "}ₑ" => @countChildren T v
 
-@[simp] lemma countChildren_eq_zero {T : 𝕋₀} {v : 𝕍} (h : ∀ m, m :: v ∉ T) : #{T, v}ₑ = 0 := by
+@[simp] lemma countChildren_eq_zero (h : ∀ m, m :: v ∉ T) : #{T, v}ₑ = 0 := by
   simp [countChildren, *]
 
-@[simp] lemma countChildren_eq_top {T : 𝕋₀} {v : 𝕍} (h : ∀ m, m :: v ∈ T) : #{T, v}ₑ = ⊤ := by
+@[simp] lemma countChildren_eq_top (h : ∀ m, m :: v ∈ T) : #{T, v}ₑ = ⊤ := by
     simp [countChildren, *]
     rw [iSup_eq_top (fun (m : ℕ) => (m + 1 : WithTop ℕ))]
     intro b hb
@@ -175,7 +175,7 @@ scoped[RLTree] notation "#{" T ", " v "}ₑ" => @countChildren T v
       have : c = b' + 1 := by have := WithTop.add_eq_coe.1 hc; aesop
       simp [*]
 
-@[simp] lemma countChildren_eq_top_iff {T : 𝕋₀} {v : 𝕍} : (∀ m, m :: v ∈ T) ↔ #{T, v}ₑ = ⊤ := by
+@[simp] lemma countChildren_eq_top_iff : (∀ m, m :: v ∈ T) ↔ #{T, v}ₑ = ⊤ := by
   constructor
   · exact countChildren_eq_top
   · intro h; simp [countChildren] at h
@@ -188,10 +188,10 @@ scoped[RLTree] notation "#{" T ", " v "}ₑ" => @countChildren T v
     exact mem_iff.2 <| T.generate_refl ▸ generateSet.less n v
       (Eq.symm T.generate_refl ▸ mem_iff.1 hn) m (by omega)
 
-@[simp] lemma countChildren_ge {T : 𝕋₀} {v : 𝕍} {m : ℕ} (h : m :: v ∈ T) : m + 1 ≤ #{T, v}ₑ := by
+@[simp] lemma countChildren_ge {m : ℕ} (h : m :: v ∈ T) : m + 1 ≤ #{T, v}ₑ := by
   simp [countChildren]; exact @le_iSup₂ (WithTop ℕ) ℕ _ _ _ _ h
 
-lemma countChildren_mem {T : 𝕋₀} {v : 𝕍} {h : #{T, v}ₑ ≠ ⊤} {h' : #{T, v}ₑ ≠ 0} :
+lemma countChildren_mem {h : #{T, v}ₑ ≠ ⊤} {h' : #{T, v}ₑ ≠ 0} :
   ∃ m : ℕ, m :: v ∈ T ∧ #{T, v}ₑ = m + 1 := by
   obtain ⟨n, hn⟩ := WithTop.ne_top_iff_exists.1 h
   have : n ≠ 0 := by by_contra h'; have := Eq.symm <| h' ▸ hn; simp at this; contradiction
@@ -219,7 +219,7 @@ lemma countChildren_mem {T : 𝕋₀} {v : 𝕍} {h : #{T, v}ₑ ≠ ⊤} {h' : 
       set n' := n - 1 with hn'; rw [show n = n' + 1 from by omega]; aesop];
     exact Eq.symm hn
 
-lemma countChildren_ge_iff {T : 𝕋₀} {v : 𝕍} {m : ℕ} : m :: v ∈ T ↔ m + 1 ≤ #{T, v}ₑ := by
+lemma countChildren_ge_iff {m : ℕ} : m :: v ∈ T ↔ m + 1 ≤ #{T, v}ₑ := by
   constructor
   · exact countChildren_ge
   · intro h
@@ -244,7 +244,7 @@ lemma countChildren_ge_iff {T : 𝕋₀} {v : 𝕍} {m : ℕ} : m :: v ∈ T ↔
       exact mem_iff.2 <| T.generate_refl ▸ generateSet.less (n - 1) v
         (Eq.symm T.generate_refl ▸ mem_iff.1 this) m (by omega)
 
-private def ext_of_countChildren_aux {T1 T2 : 𝕋₀} (h : ∀ v, #{T1, v}ₑ = #{T2, v}ₑ) (v : 𝕍) :
+private def ext_of_countChildren_aux (h : ∀ v, #{T1, v}ₑ = #{T2, v}ₑ) (v : 𝕍) :
   v ∈ T1 → v ∈ T2 := by
   intro hv; cases v with
   | nil => exact T2.nil_mem
@@ -258,13 +258,14 @@ private def ext_of_countChildren_aux {T1 T2 : 𝕋₀} (h : ∀ v, #{T1, v}ₑ =
 noncomputable instance : FunLike 𝕋₀ 𝕍 ℕ∞ where
   coe T := T.countChildren
   coe_injective' T1 T2 h := by
-    ext l; simp at h; have := congrArg (fun f => f l) h; simpa using this
+    ext v; simp at h; have := congrArg (fun f => f v) h; simpa using this
+end
 
 -- ## descendantTreeAt
 
 def descendantTreeAt {T : 𝕋₀} (x : 𝕍) (hx : x ∈ T) : 𝕋₀ := ⟨
   {x' | x' ++ x ∈ T}, by
-    ext l; constructor
+    ext v; constructor
     · intro hv
       induction hv with
       | mem => assumption
@@ -274,7 +275,7 @@ def descendantTreeAt {T : 𝕋₀} (x : 𝕍) (hx : x ∈ T) : 𝕋₀ := ⟨
       | less m v' hv' n hnm ih =>
         exact mem_iff.2 <| T.generate_refl ▸ generateSet.less m (v' ++ x)
           (Eq.symm T.generate_refl ▸ mem_iff.1 ih) n hnm
-    · intro hv; exact generateSet.mem l hv
+    · intro hv; exact generateSet.mem v hv
     , by
       apply not_imp_not.2 Set.not_nonempty_iff_eq_empty.2; simp only [not_not]
       exact ⟨[], by simp [*]⟩
@@ -291,10 +292,10 @@ scoped[RLTree] notation "‖" T "‖ₕ" => height T
 
 -- ## truncation
 section
-variable {T : 𝕋₀}
+variable {T : 𝕋₀} {n m : ℕ}
 
 def truncation (T : 𝕋₀) (n : ℕ) : 𝕋₀ := ⟨{v | ‖v‖ₕ ≤ n ∧ v ∈ T}, by
-    ext l; constructor
+    ext v; constructor
     · intro hv; simp
       induction hv with
       | mem => assumption
@@ -304,7 +305,7 @@ def truncation (T : 𝕋₀) (n : ℕ) : 𝕋₀ := ⟨{v | ‖v‖ₕ ≤ n ∧
       | less m v' hv' n hnm ih =>
         exact ⟨by grind, mem_iff.2 <| T.generate_refl ▸ generateSet.less m v'
           (Eq.symm T.generate_refl ▸ mem_iff.1 ih.2) n hnm⟩
-    · intro hv; exact generateSet.mem l hv
+    · intro hv; exact generateSet.mem v hv
     , by
       apply not_imp_not.2 Set.not_nonempty_iff_eq_empty.2; simp only [not_not]
       exact ⟨[], by simp [*]⟩
@@ -318,30 +319,30 @@ scoped[RLTree] notation T "↾(" n ")" => @truncation T n
   · intro h; simp [Set.mem_singleton_iff.1 h]
 
 lemma truncation_height_at_most (n : ℕ) : ‖T↾(n)‖ₕ ≤ n := by
-  simp [truncation, height]; apply @iSup₂_le (WithTop ℕ); intro l hv; exact ENat.coe_le_coe.2 hv.1
+  simp [truncation, height]; apply @iSup₂_le (WithTop ℕ); intro v hv; exact ENat.coe_le_coe.2 hv.1
 
 @[simp] lemma truncation_mem_length_at_most (n : ℕ) : ∀ v ∈ T↾(n), ‖v‖ₕ ≤ n := by
   intro v hv; have := le_trans (mem_length_at_most_height v hv) (@truncation_height_at_most T n)
   simp at this; exact this
 
-@[simp] lemma truncation_truncation {n m : ℕ} : T↾(n)↾(m) = T↾(min n m) := by
+@[simp] lemma truncation_truncation : T↾(n)↾(m) = T↾(min n m) := by
   simp [truncation, mem_iff]; grind
 
-@[simp] lemma mem_of_mem_truncation {n : ℕ} {l : 𝕍} (hv : l ∈ T↾(n)) : l ∈ T := hv.2
+@[simp] lemma mem_of_mem_truncation {n : ℕ} {v : 𝕍} (hv : v ∈ T↾(n)) : v ∈ T := hv.2
 
 @[simp] lemma truncation_subset {n : ℕ} : T↾(n) ⊆ T := by
   dsimp [instHasSubset]; simp [Set.subset_def]; exact @mem_of_mem_truncation T n
 
-@[simp] lemma mem_higher_truncation_of_mem_truncation {n m : ℕ} (hnm : n < m) {l : 𝕍}
-  (hv : l ∈ T↾(n)) : l ∈ T↾(m) := by simp [mem_iff, truncation] at *; exact ⟨by omega, hv.2⟩
+@[simp] lemma mem_higher_truncation_of_mem_truncation (hnm : n < m) {v : 𝕍} (hv : v ∈ T↾(n)) :
+  v ∈ T↾(m) := by simp [mem_iff, truncation] at *; exact ⟨by omega, hv.2⟩
 
 @[simp] lemma mem_truncation_of_mem {n : ℕ} {v : 𝕍} (hv : ‖v‖ₕ ≤ n) (hv' : v ∈ T) : v ∈ T↾(n) := by
   simp [mem_iff, truncation] at *; exact ⟨by omega, hv'⟩
 
-@[simp] lemma mem_truncation_of_mem_other_truncation {n m : ℕ} {v : 𝕍} (hv : ‖v‖ₕ ≤ n)
+@[simp] lemma mem_truncation_of_mem_other_truncation {v : 𝕍} (hv : ‖v‖ₕ ≤ n)
   (hv' : v ∈ T↾(m)) : v ∈ T↾(n) := by simp [mem_iff, truncation] at *; exact ⟨by omega, hv'.2⟩
 
-lemma ext_of_truncation {T1 T2 : 𝕋₀} (h : ∀ n, T1↾(n) = T2↾(n)) : T1 = T2 := by
+lemma ext_of_truncation (h : ∀ n, T1↾(n) = T2↾(n)) : T1 = T2 := by
   apply ext_of_set; ext v; cases v with
   | nil => constructor <;> intro <;> exact nil_mem
   | cons m v' =>
@@ -555,9 +556,9 @@ instance : CompleteSpace 𝕋₀ where
       have h2 := hSsub' n U (T' n) ((Set.mem_inter_iff _ _ _).1 hU).2 (hT'mem n)
       have h1 := congrArg (fun T => T↾(n)) h1; simp at h1
       exact h1 ▸ h2
-    set Tval : Set 𝕍 := {l | l ∈ (T' ‖l‖ₕ)↾(‖l‖ₕ)}
+    set Tval : Set 𝕍 := {v | v ∈ (T' ‖v‖ₕ)↾(‖v‖ₕ)}
     set T : 𝕋₀ := ⟨Tval, by
-      ext l; constructor
+      ext v; constructor
       · intro hv; induction hv with
         | mem v' hv' => assumption
         | tail m v' hv' ih =>
@@ -565,18 +566,18 @@ instance : CompleteSpace 𝕋₀ where
           exact mem_truncation_of_mem_other_truncation (by omega) <| tail_mem ih
         | less m v' hv' n hnm ih =>
           exact @less_mem ((T' (‖v'‖ₕ + 1))↾(‖v'‖ₕ + 1)) m n v' ih hnm
-      · exact generateSet.mem l
+      · exact generateSet.mem v
       , Set.nonempty_iff_ne_empty.1 ⟨[], by simp [Tval]⟩⟩
     use T; have := @nhds_basis_uniformity _ _ _ _ _ instUniformityBasis T
     simp only [uniformityBasis, Set.mem_setOf_eq] at this
     refine (this.ge_iff.mpr ?_); simp only [forall_const]
     have hTtr (n : ℕ) : T↾(n) = (T' n)↾(n) := by
-      simp [truncation]; congr; ext l; simp [mem_iff, T, Tval, truncation]; intro hv
-      have := (show ‖l‖ₕ + (n - ‖l‖ₕ) = n from by omega) ▸ hT'tr ‖l‖ₕ (n - ‖l‖ₕ)
+      simp [truncation]; congr; ext v; simp [mem_iff, T, Tval, truncation]; intro hv
+      have := (show ‖v‖ₕ + (n - ‖v‖ₕ) = n from by omega) ▸ hT'tr ‖v‖ₕ (n - ‖v‖ₕ)
       constructor
-      · intro hv'; exact @mem_of_mem_truncation _ ‖l‖ₕ _
+      · intro hv'; exact @mem_of_mem_truncation _ ‖v‖ₕ _
           (this ▸ mem_truncation_of_mem (by omega) hv')
-      · intro hv'; exact @mem_of_mem_truncation _ ‖l‖ₕ _
+      · intro hv'; exact @mem_of_mem_truncation _ ‖v‖ₕ _
           (Eq.symm this ▸ mem_truncation_of_mem (by omega) hv')
     intro n; exact f.sets_of_superset (hSmem (n + 1)) (by
       simp only [Set.subset_def, Set.mem_setOf_eq]; intro U hU; rw [hTtr (n + 1)]
@@ -586,15 +587,15 @@ instance : MeasurableSpace 𝕋₀ := borel 𝕋₀
 
 -- ## generateSet
 
-private def generate_tail_of_single (l : 𝕍) : Set 𝕍 :=
-  ⋃ (n : Fin (‖l‖ₕ + 1)), {l.drop n}
+private def generate_tail_of_single (v : 𝕍) : Set 𝕍 :=
+  ⋃ (n : Fin (‖v‖ₕ + 1)), {v.drop n}
 
-@[simp] private lemma finite_generate_tail_of_single (l : 𝕍) :
-  (generate_tail_of_single l).Finite := by
+@[simp] private lemma finite_generate_tail_of_single (v : 𝕍) :
+  (generate_tail_of_single v).Finite := by
   simp only [generate_tail_of_single]; apply Set.finite_iUnion; simp
 
-@[simp] private lemma mem_self_generate_tail_of_single (l : 𝕍) :
-  l ∈ generate_tail_of_single l := by simp [generate_tail_of_single]; use 0; simp
+@[simp] private lemma mem_self_generate_tail_of_single (v : 𝕍) :
+  v ∈ generate_tail_of_single v := by simp [generate_tail_of_single]; use 0; simp
 
 @[simp] private lemma treeNode_eq_of_mem_generate_tail_of_single_of_same_length (v u : 𝕍)
   (hvu : ‖v‖ₕ = ‖u‖ₕ) (hu : u ∈ generate_tail_of_single v) : u = v := by
@@ -603,18 +604,18 @@ private def generate_tail_of_single (l : 𝕍) : Set 𝕍 :=
   have := Eq.symm hvu ▸ congrArg List.length hn; simp at this
   have := (show n' = 0 from by omega) ▸ hn; simp at this; exact Eq.symm this
 
-private def generate_tail (s : Set 𝕍) : Set 𝕍 := ⋃ l : ↑s, generate_tail_of_single l
+private def generate_tail (s : Set 𝕍) : Set 𝕍 := ⋃ v : s, generate_tail_of_single v
 
 @[simp] private lemma finite_generate_tail_of_finite (s : Set 𝕍) (hs : s.Finite) :
   (generate_tail s).Finite := by
   simp only [generate_tail]
   apply fun h => @Set.finite_iUnion _ _ (Set.finite_coe_iff.2 hs) _ h; simp
 
-@[simp] private lemma mem_self_generate_tail (l : 𝕍) (s : Set 𝕍) (h : l ∈ ↑s) :
-  l ∈ generate_tail s := by simp [generate_tail]; use l; simp [*]
+@[simp] private lemma mem_self_generate_tail (v : 𝕍) (s : Set 𝕍) (h : v ∈ ↑s) :
+  v ∈ generate_tail s := by simp [generate_tail]; use v; simp [*]
 
-@[simp] private lemma tail_mem_of_mem_generate_tail (m : ℕ) (l : 𝕍) (s : Set 𝕍)
-  (h : m :: l ∈ generate_tail s) : l ∈ generate_tail s := by
+@[simp] private lemma tail_mem_of_mem_generate_tail (m : ℕ) (v : 𝕍) (s : Set 𝕍)
+  (h : m :: v ∈ generate_tail s) : v ∈ generate_tail s := by
   simp [generate_tail] at h ⊢; obtain ⟨v', hv'1, hv'2⟩ := h
   simp [generate_tail_of_single] at hv'2 ⊢; obtain ⟨⟨n, hn⟩, hv'2⟩ := hv'2; simp at hv'2
   by_cases hv'3 : n = ‖v'‖ₕ
@@ -622,16 +623,16 @@ private def generate_tail (s : Set 𝕍) : Set 𝕍 := ⋃ l : ↑s, generate_ta
   · use v'; simp [*]; use ⟨n + 1, by omega⟩; simp only [←@List.drop_drop _ 1 n v', hv'2,
     List.drop_succ_cons, List.drop_zero]
 
-private def generate_less_of_single (l : 𝕍) (hv : l ≠ []) : Set 𝕍 :=
-  ⋃ (n : Fin (l.head hv + 1)), {(n : ℕ) :: l.tail}
+private def generate_less_of_single (v : 𝕍) (hv : v ≠ []) : Set 𝕍 :=
+  ⋃ (n : Fin (v.head hv + 1)), {(n : ℕ) :: v.tail}
 
-@[simp] private lemma finite_generate_less_of_single (l : 𝕍) (hv : l ≠ []) :
-  (generate_less_of_single l hv).Finite := by
+@[simp] private lemma finite_generate_less_of_single (v : 𝕍) (hv : v ≠ []) :
+  (generate_less_of_single v hv).Finite := by
   simp only [generate_less_of_single]; apply Set.finite_iUnion; simp
 
-@[simp] private lemma mem_self_generate_less_of_single (l : 𝕍) (hv : l ≠ []) :
-  l ∈ generate_less_of_single l hv := by
-  simp [generate_less_of_single]; use ⟨l.head hv, by omega⟩; simp
+@[simp] private lemma mem_self_generate_less_of_single (v : 𝕍) (hv : v ≠ []) :
+  v ∈ generate_less_of_single v hv := by
+  simp [generate_less_of_single]; use ⟨v.head hv, by omega⟩; simp
 
 @[simp] private lemma same_length_of_mem_generate_less_of_single (v u : 𝕍) (hv : v ≠ [])
   (hu : u ∈ generate_less_of_single v hv) : ‖v‖ₕ = ‖u‖ₕ := by
@@ -640,18 +641,18 @@ private def generate_less_of_single (l : 𝕍) (hv : l ≠ []) : Set 𝕍 :=
   rw [(show ‖v‖ₕ - 1 + 1 = ‖v‖ₕ from by omega)] at this; exact this
 
 private def generate_less (s : Set 𝕍) (hs : [] ∉ s) :=
-  ⋃ l : ↑s, generate_less_of_single l (by aesop)
+  ⋃ v : ↑s, generate_less_of_single v (by aesop)
 
 @[simp] private lemma finite_generate_less (s : Set 𝕍) (hs : [] ∉ s) (hs' : s.Finite) :
   (generate_less s hs).Finite := by
   simp only [generate_less]
   apply fun h => @Set.finite_iUnion _ _ (Set.finite_coe_iff.2 hs') _ h; simp
 
-@[simp] private lemma mem_self_generate_less (l : 𝕍) (s : Set 𝕍) (hs : [] ∉ s)
-  (hv' : l ∈ ↑s) : l ∈ generate_less s hs := by simp [generate_less]; use l, hv'; simp
+@[simp] private lemma mem_self_generate_less (v : 𝕍) (s : Set 𝕍) (hs : [] ∉ s)
+  (hv' : v ∈ ↑s) : v ∈ generate_less s hs := by simp [generate_less]; use v, hv'; simp
 
 @[simp] private lemma cons_mem_of_mem_generate_less (s : Set 𝕍) (hs : [] ∉ s) (m : ℕ)
-  (l : 𝕍) (hv : m :: l ∈ generate_less s hs) : ∃ n, m ≤ n ∧ n :: l ∈ s := by
+  (v : 𝕍) (hv : m :: v ∈ generate_less s hs) : ∃ n, m ≤ n ∧ n :: v ∈ s := by
   simp [generate_less] at hv; obtain ⟨v', hv'1, hv'2⟩ := hv
   simp [generate_less_of_single] at hv'2; obtain ⟨⟨⟨m', hm'⟩, hv'2⟩, hv'3⟩ := hv'2
   cases v' with
@@ -661,15 +662,15 @@ private def generate_less (s : Set 𝕍) (hs : [] ∉ s) :=
     exact ⟨by omega, hv'1⟩
 
 @[simp] private lemma less_mem_of_mem_generate_less (s : Set 𝕍) (hs : [] ∉ s) (n m : ℕ)
-  (hmn : n ≤ m) (l : 𝕍) (hv : m :: l ∈ generate_less s hs) : n :: l ∈ generate_less s hs
+  (hmn : n ≤ m) (v : 𝕍) (hv : m :: v ∈ generate_less s hs) : n :: v ∈ generate_less s hs
   := by
-  obtain ⟨n', hmn', hv'⟩ := cons_mem_of_mem_generate_less s hs m l hv
-  simp [generate_less]; use n' :: l, hv'; simp [generate_less_of_single]; use ⟨n, by omega⟩
+  obtain ⟨n', hmn', hv'⟩ := cons_mem_of_mem_generate_less s hs m v hv
+  simp [generate_less]; use n' :: v, hv'; simp [generate_less_of_single]; use ⟨n, by omega⟩
 
 private lemma generateSet_eq_generate_tail_then_less (s : Set 𝕍) (hs : s ≠ ∅) :
   generateSet s = {[]} ∪ generate_less (generate_tail s \ {[]}) (by simp) := by
-  ext l; simp only [Set.singleton_union, Set.mem_insert_iff]; constructor
-  · intro hv; by_cases hv'1 : l = []
+  ext v; simp only [Set.singleton_union, Set.mem_insert_iff]; constructor
+  · intro hv; by_cases hv'1 : v = []
     · left; exact hv'1
     · right; induction hv with
       | mem v' hv'2 =>
@@ -685,7 +686,7 @@ private lemma generateSet_eq_generate_tail_then_less (s : Set 𝕍) (hs : s ≠ 
       | less m v' hv'2 n hnm ih =>
         simp only [reduceCtorEq, not_false_eq_true, forall_const] at ih
         exact less_mem_of_mem_generate_less _ _ n m hnm v' ih
-  · intro hv; by_cases hv'1 : l = []
+  · intro hv; by_cases hv'1 : v = []
     · exact hv'1 ▸ @nil_mem (generateTree s hs)
     · simp [hv'1, generate_less] at hv; obtain ⟨v', ⟨hv'2, hv'3⟩, hv'4⟩ := hv
       simp [generate_tail] at hv'2; obtain ⟨v'', hv'2, hv'5⟩ := hv'2
@@ -744,10 +745,10 @@ lemma setOfLevel_def (T : 𝕋₀) :
 
 variable {T : 𝕋₀}
 
-@[simp] lemma setOfLevel_zero : 𝕍{T, 0} = {[]} := by
+@[simp] lemma setOfLevel_zero : 𝕍{T,0} = {[]} := by
   simp [setOfLevel]
 
-@[simp] lemma setOfLevel_same_length {n : ℕ} : ∀ ν ∈ 𝕍{T,n}, ‖ν‖ₕ = n := by
+@[simp] lemma setOfLevel_same_length {n : ℕ} : ∀ v ∈ 𝕍{T,n}, ‖v‖ₕ = n := by
   intro v hv; simp [setOfLevel, truncation] at hv; by_cases h : n = 0
   · have := h ▸ hv.1.1; omega
   · have := (not_imp_not.2 <| hv.2 h) (not_not.2 hv.1.2); omega
@@ -787,7 +788,7 @@ noncomputable def generationSizeFromLevel (T : 𝕋₀) :=
 scoped[RLTree] notation "#{" T ", " n "}ₑ" => @generationSizeFromLevel T n
 
 lemma generationSizeFromLevel_eq_tsum_sum (T : 𝕋₀) (n : ℕ) :
-  #{T, n}ₑ = ∑' m, ∑ ν : 𝕍{n,m}, ↑(#{T, ↑ν}ₑ) := tsumOfLevel_eq_tsum_sum' _ n (by simp) (by simp)
+  #{T, n}ₑ = ∑' m, ∑ v : 𝕍{n,m}, ↑(#{T, ↑v}ₑ) := tsumOfLevel_eq_tsum_sum' _ n (by simp) (by simp)
 
 -- instance _root_.ENat.instTopologicalSpace : TopologicalSpace ℕ∞ :=
 --   TopologicalSpace.induced ENat.toENNReal inferInstance
@@ -855,7 +856,7 @@ instance : Coe 𝕋 (Set 𝕍) where
   coe T := T.set
 
 instance : Membership 𝕍 𝕋 where
-  mem T l := l ∈ T.set
+  mem T v := v ∈ T.set
 
 lemma mem_iff {v : 𝕍} {T : 𝕋} : v ∈ T ↔ v ∈ T.set := ⟨by
   intro h; exact h, by simp [instMembershipTreeNode]⟩
@@ -938,9 +939,9 @@ instance : CompleteSpace 𝕋 where
       have h2 := hSsub' n U (T' n) ((Set.mem_inter_iff _ _ _).1 hU).2 (hT'mem n)
       have h1 := congrArg (fun T : 𝕋 => (T↾(n) : 𝕋)) h1; simp at h1 h2; have := h1 ▸ h2;
       apply toRLTree_inj; exact this
-    let Tval : Set 𝕍 := {l | l ∈ ((T' ‖l‖ₕ)↾(‖l‖ₕ) : 𝕋)}
+    let Tval : Set 𝕍 := {v | v ∈ ((T' ‖v‖ₕ)↾(‖v‖ₕ) : 𝕋)}
     set _T : 𝕋₀ := ⟨Tval, by
-      ext l; constructor
+      ext v; constructor
       · intro hv; induction hv with
         | mem v' hv' => assumption
         | tail m v' hv' ih =>
@@ -950,16 +951,16 @@ instance : CompleteSpace 𝕋 where
           exact mem_truncation_of_mem_other_truncation (by omega) <| tail_mem ih
         | less m v' hv' n hnm ih =>
           exact @less_mem ((T' (‖v'‖ₕ + 1))↾(‖v'‖ₕ + 1) : 𝕋).toRLTree m n v' ih hnm
-      · exact generateSet.mem l
+      · exact generateSet.mem v
       , Set.nonempty_iff_ne_empty.1 ⟨[], by simp [mem_iff, Tval]⟩⟩
     have hTtr (n : ℕ) : _T↾(n) = (T' n).toRLTree↾(n) := by
-      simp [RLTree.truncation, _T, Tval]; congr; ext l; simp [mem_iff, RLTree.mem_iff]; intro hv
-      have := (show ‖l‖ₕ + (n - ‖l‖ₕ) = n from by omega) ▸ hT'tr ‖l‖ₕ (n - ‖l‖ₕ)
+      simp [RLTree.truncation, _T, Tval]; congr; ext v; simp [mem_iff, RLTree.mem_iff]; intro hv
+      have := (show ‖v‖ₕ + (n - ‖v‖ₕ) = n from by omega) ▸ hT'tr ‖v‖ₕ (n - ‖v‖ₕ)
       simp only [truncation] at this; rw [←toRLTree_iff] at this; simp only at this
       constructor
-      · intro hv'; exact @mem_of_mem_truncation _ ‖l‖ₕ _
+      · intro hv'; exact @mem_of_mem_truncation _ ‖v‖ₕ _
           (this ▸ mem_truncation_of_mem (by omega) hv')
-      · intro hv'; exact @mem_of_mem_truncation _ ‖l‖ₕ _
+      · intro hv'; exact @mem_of_mem_truncation _ ‖v‖ₕ _
           (Eq.symm this ▸ mem_truncation_of_mem (by omega) hv')
     set T : 𝕋 := @mk _T (by
       simp only [IsLocallyFinite]; intro n; rw [hTtr n]
@@ -1002,29 +1003,29 @@ instance : TopologicalSpace.SeparableSpace 𝕋 where
 
 instance : MeasurableSpace 𝕋 := borel 𝕋
 
-variable (T : 𝕋) (ν : 𝕍) (n : ℕ)
+variable (T : 𝕋) (v : 𝕍) (n : ℕ)
 
-@[simp] lemma countChildren_ne_top : #{T, ν}ₑ ≠ ⊤ := by
+@[simp] lemma countChildren_ne_top : #{T, v}ₑ ≠ ⊤ := by
   simp [←countChildren_eq_top_iff]
-  set S := T.toRLTree↾(‖ν‖ₕ + 1) with hS
+  set S := T.toRLTree↾(‖v‖ₕ + 1) with hS
   have hT := (@Nat.card_eq_fintype_card _
-    <| hS ▸ (@Fintype.ofFinite _ <| T.locally_finite (‖ν‖ₕ + 1)))
-    ▸ hS ▸ (@Finite.equivFin _ <| T.locally_finite (‖ν‖ₕ + 1))
-  set n := @Fintype.card _ <| hS ▸ (@Fintype.ofFinite _ <| T.locally_finite (‖ν‖ₕ + 1)) with hn
-  use n; by_contra h; have h := hS ▸ @mem_truncation_of_mem _ (‖ν‖ₕ + 1) _ (by simp) h
-  let F (m : Fin (n + 1)) : S.set.Elem := ⟨m :: ν, @less_mem S n _ ν h (by omega)⟩
+    <| hS ▸ (@Fintype.ofFinite _ <| T.locally_finite (‖v‖ₕ + 1)))
+    ▸ hS ▸ (@Finite.equivFin _ <| T.locally_finite (‖v‖ₕ + 1))
+  set n := @Fintype.card _ <| hS ▸ (@Fintype.ofFinite _ <| T.locally_finite (‖v‖ₕ + 1)) with hn
+  use n; by_contra h; have h := hS ▸ @mem_truncation_of_mem _ (‖v‖ₕ + 1) _ (by simp) h
+  let F (m : Fin (n + 1)) : S.set.Elem := ⟨m :: v, @less_mem S n _ v h (by omega)⟩
   have := Fintype.card_le_of_injective F (by simp [Function.Injective, F]; omega); simp [hn] at this
 
-@[simp] lemma countChildren_lt_top : countChildren ↑T ν < ⊤ := by
-  rw [WithTop.lt_top_iff_ne_top]; exact countChildren_ne_top T ν
+@[simp] lemma countChildren_lt_top : countChildren ↑T v < ⊤ := by
+  rw [WithTop.lt_top_iff_ne_top]; exact countChildren_ne_top T v
 
-noncomputable def countChildren : ℕ := (T.toRLTree.countChildren ν).lift (by simp)
+noncomputable def countChildren : ℕ := (T.toRLTree.countChildren v).lift (by simp)
 
 scoped[RLTree.LocallyFinite] notation "#{" T ", " v "}" => @countChildren T v
 
-lemma countChildren_eq_toNat : #{T, ν} = #{T, ν}ₑ.toNat := ENat.lift_eq_toNat_of_lt_top (by simp)
+lemma countChildren_eq_toNat : #{T, v} = #{T, v}ₑ.toNat := ENat.lift_eq_toNat_of_lt_top (by simp)
 
-lemma countChildren_toENat : (#{T, ν} : ℕ∞) = #{T, ν}ₑ := by
+lemma countChildren_toENat : (#{T, v} : ℕ∞) = #{T, v}ₑ := by
   simp [countChildren]
 
 @[ext] def ext_of_countChildren (T1 T2 : 𝕋) (h : ∀ l, #{T1, l} = #{T2, l}) : T1 = T2 :=
@@ -1032,16 +1033,16 @@ lemma countChildren_toENat : (#{T, ν} : ℕ∞) = #{T, ν}ₑ := by
     intro l; specialize h l; simp [countChildren] at h
     exact @ENat.coe_lift #{T1, l}ₑ (by simp) ▸ h ▸ @ENat.coe_lift #{T2, l}ₑ (by simp))
 
-@[simp] lemma countChildren_eq_zero_of_not_mem (hv : ν ∉ T) : #{T, ν} = 0 := by
+@[simp] lemma countChildren_eq_zero_of_not_mem (hv : v ∉ T) : #{T, v} = 0 := by
   simp [countChildren, RLTree.countChildren, ENat.lift, WithTop.untop_eq_iff]
   have {m : ℕ∞} (hm : m ≤ 0) : m = 0 := by simp only [nonpos_iff_eq_zero] at hm; exact hm
-  apply this; apply (@iSup₂_le_iff (WithTop ℕ) ℕ (fun m => m :: ν ∈ T) _).2; intro m hm
+  apply this; apply (@iSup₂_le_iff (WithTop ℕ) ℕ (fun m => m :: v ∈ T) _).2; intro m hm
   simp; exact hv <| @tail_mem _ _ _ hm
 
 noncomputable instance : FunLike 𝕋 𝕍 ℕ where
   coe T := T.countChildren
   coe_injective' T1 T2 h := by
-    ext l; simp at h; have := congrArg (fun f => f l) h; simpa using this
+    ext v; simp at h; have := congrArg (fun f => f v) h; simpa using this
 
 @[simp] lemma setOfLevel_finite : Set.Finite 𝕍{T, n} := by
   simp [setOfLevel]; by_cases n = 0
@@ -1168,7 +1169,7 @@ noncomputable def generationSizeFromLevel := tsumOfLevel T.countChildren
 scoped[RLTree.LocallyFinite] notation "#{" T ", " n "}" => @generationSizeFromLevel T n
 
 private lemma generationSizeFromLevel_def_aux_1 :
-  #{T, n} = ∑ v ∈ Finset.subtype (fun ν : 𝕍 ↦ ‖ν‖ₕ = n) 𝕍{T, n}.toFinset, #{T, ↑v} := by
+  #{T, n} = ∑ v ∈ Finset.subtype (fun v : 𝕍 ↦ ‖v‖ₕ = n) 𝕍{T, n}.toFinset, #{T, ↑v} := by
   simp only [generationSizeFromLevel, tsumOfLevel]
   have heq := @tsum_eq_sum ℕ 𝕍{n} Nat.instAddCommMonoid instTopologicalSpaceNat
     (fun v => #{T, ↑v}) (SummationFilter.unconditional ↑𝕍{n}) _
@@ -1183,7 +1184,7 @@ private lemma generationSizeFromLevel_def_aux_1 :
   simp [id_eq] at heq; exact heq
 
 private lemma generationSizeFromLevel_def_aux_2 :
-  #{T, n}ₑ = ∑ v ∈ Finset.subtype (fun ν : 𝕍 ↦ ‖ν‖ₕ = n)
+  #{T, n}ₑ = ∑ v ∈ Finset.subtype (fun v : 𝕍 ↦ ‖v‖ₕ = n)
   𝕍{T, n}.toFinset, #{T, ↑v}ₑ := by
   simp only [RLTree.generationSizeFromLevel, tsumOfLevel, Function.comp_apply]
   have heq := @tsum_eq_sum ℝ≥0∞ 𝕍{n} _ _ (fun v => #{T, ↑v}) (SummationFilter.unconditional ↑𝕍{n})
@@ -1203,7 +1204,7 @@ private lemma generationSizeFromLevel_def_aux_2 :
   simp only [countChildren]; conv => left; arg 2; ext; rw[this]
   apply Eq.symm; exact @map_sum {v : 𝕍 // ‖v‖ₕ = n} ℕ∞ ℝ≥0∞ _ _ _ _ _
     ENat.toENNRealRingHom (fun v => #{T, ↑v}ₑ)
-    (Finset.subtype (fun ν : 𝕍 ↦ ‖ν‖ₕ = n) 𝕍{T, n}.toFinset))
+    (Finset.subtype (fun v : 𝕍 ↦ ‖v‖ₕ = n) 𝕍{T, n}.toFinset))
 
 lemma generationSizeFromLevel_def_toRLTree : (#{T, n} : ℝ≥0∞) = #{T, n}ₑ := by
   simp only [generationSizeFromLevel_def_aux_1, generationSizeFromLevel_def_aux_2, countChildren];
