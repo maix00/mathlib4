@@ -4,10 +4,14 @@ import Mathlib.Probability.RandomGraph.Basic
 
 @[reducible] def TreeNode := List ℕ
 
+scoped[TreeNode] notation "𝕍" => TreeNode
+
 namespace TreeNode
 
-instance : Coe TreeNode (List ℕ) where
+instance : Coe 𝕍 (List ℕ) where
   coe l := l
+
+scoped[TreeNode] notation "‖" v "‖ₕ" => List.length v
 
 end TreeNode
 
@@ -109,24 +113,28 @@ end Set
 
 namespace TreeNode
 
-def setOfLevel (n : ℕ) : Set TreeNode := {ν | ν.length = n}
+def setOfLevel (n : ℕ) : Set 𝕍 := {ν | ν.length = n}
 
-def setOfLevelAtMost (n : ℕ) : Set TreeNode := {ν | ν.length ≤ n}
+scoped[TreeNode] notation "𝕍{" n "}" => setOfLevel n
 
-instance instCountableSetTreeNodeOfLength (n : ℕ) :
-  Countable (setOfLevel n) := by
+def setOfLevelAtMost (n : ℕ) : Set 𝕍 := {ν | ν.length ≤ n}
+
+scoped[TreeNode] notation "𝕍{≤" n "}" => setOfLevelAtMost n
+
+instance instCountableSetTreeNodeOfLength (n : ℕ) : Countable 𝕍{n} := by
   simp [setOfLevel]; exact Subtype.countable
 
-instance instCountableSetTreeNodeOfLengthAtMost (n : ℕ) :
-  Countable (setOfLevelAtMost n) := by
+instance instCountableSetTreeNodeOfLengthAtMost (n : ℕ) : Countable 𝕍{≤n} := by
   simp [setOfLevelAtMost]; exact Subtype.countable
 
 lemma setOfLevelAtMost_eq_iUnion_finset_setOfLevel (n : ℕ) :
-  setOfLevelAtMost n = ⋃ k : Finset.range (n + 1), setOfLevel k := by
+  𝕍{≤n} = ⋃ k : Finset.range (n + 1), 𝕍{k} := by
   simp [setOfLevelAtMost, setOfLevel]; ext v; simp; omega
 
-def setOfLevelOfValAtMost (n m : ℕ) : Set TreeNode :=
+def setOfLevelOfValAtMost (n m : ℕ) : Set 𝕍 :=
   ⋃ f : Fin n → Fin (m + 1), {(List.ofFn f).map Fin.val}
+
+scoped[TreeNode] notation "𝕍{" n ",≤" m "}" => setOfLevelOfValAtMost n m
 
 @[simp] lemma setOfLevelOfValAtMost_zero : setOfLevelOfValAtMost 0 = fun _ => {[]} := by
   ext; simp [setOfLevelOfValAtMost]
@@ -140,25 +148,20 @@ def setOfLevelOfValAtMost (n m : ℕ) : Set TreeNode :=
     have (m : ℕ) : ⋃ y, ⋃ (_ : y ≤ m), {([] : List ℕ)} = {[]} := by ext; simp; intro; use 0; omega
     rw [this m, this (m - 1)]; simp
 
-instance instFiniteSetTreeNodeOfLengthTruncated (n m : ℕ) :
-  Set.Finite (setOfLevelOfValAtMost n m) := by
+instance instFiniteSetTreeNodeOfLengthTruncated (n m : ℕ) : Set.Finite 𝕍{n,≤m} := by
   simp only [setOfLevelOfValAtMost]; apply Finite.Set.finite_iUnion
 
-noncomputable instance instFintypeSetTreeNodeOfLengthTruncated (n m : ℕ) :
-  Fintype (setOfLevelOfValAtMost n m) :=
+noncomputable instance instFintypeSetTreeNodeOfLengthTruncated (n m : ℕ) : Fintype 𝕍{n,≤m} :=
   Set.Finite.fintype <| instFiniteSetTreeNodeOfLengthTruncated n m
 
-@[simp] lemma setOfLevelOfValAtMost_subset_setOfLevel (n m : ℕ) :
-  setOfLevelOfValAtMost n m ⊆ setOfLevel n := by
+@[simp] lemma setOfLevelOfValAtMost_subset_setOfLevel (n m : ℕ) : 𝕍{n,≤m} ⊆ 𝕍{n} := by
   simp [Set.subset_def, setOfLevelOfValAtMost, setOfLevel]
 
-@[simp] lemma setOfLevelOfValAtMost_mono (n : ℕ) :
-  Monotone (setOfLevelOfValAtMost n) := by
+@[simp] lemma setOfLevelOfValAtMost_mono (n : ℕ) : Monotone (setOfLevelOfValAtMost n) := by
   intro m1 m2 h12; simp [Set.subset_def, setOfLevelOfValAtMost]; intro f
   use Fin.castLE (show m1 + 1 ≤ m2 + 1 from by omega) ∘ f; ext; simp
 
-@[simp] lemma setOfLevelOfValAtMost_union_eq_setOfLevel (n : ℕ) :
-  ⋃ m : ℕ, setOfLevelOfValAtMost n m = setOfLevel n := by
+@[simp] lemma setOfLevelOfValAtMost_union_eq_setOfLevel (n : ℕ) : ⋃ m : ℕ, 𝕍{n,≤m} = 𝕍{n} := by
   ext v; simp only [Set.mem_iUnion]; constructor
   · intro ⟨m, h⟩; exact Set.mem_of_subset_of_mem (by simp) h
   · intro h; by_cases h' : n = 0
@@ -179,25 +182,24 @@ noncomputable instance instFintypeSetTreeNodeOfLengthTruncated (n m : ℕ) :
         simp at this; omega⟩; simp only; conv => congr; congr; ext i; simp
       ext; aesop
 
-instance instFiniteSetTreeNodeOfLengthTruncatedSeqDiff (n m : ℕ) :
-  Set.Finite (Set.seqDiff (setOfLevelOfValAtMost n) m) := by
+scoped[TreeNode] notation "𝕍{" n "," m "}" => Set.seqDiff (setOfLevelOfValAtMost n) m
+
+instance instFiniteSetTreeNodeOfLengthTruncatedSeqDiff (n m : ℕ) : Set.Finite 𝕍{n,m} := by
   apply Set.seqDiff_finite_of_finite; exact TreeNode.instFiniteSetTreeNodeOfLengthTruncated n
 
-noncomputable instance instFintypeSetTreeNodeOfLengthTruncatedSeqDiff (n m : ℕ) :
-  Fintype (Set.seqDiff (setOfLevelOfValAtMost n) m) :=
+noncomputable instance instFintypeSetTreeNodeOfLengthTruncatedSeqDiff (n m : ℕ) : Fintype 𝕍{n,m} :=
   Set.Finite.fintype <| instFiniteSetTreeNodeOfLengthTruncatedSeqDiff n m
 
 variable {α : Type*}
 
-noncomputable def tsumOfLevel [AddCommMonoid α] [TopologicalSpace α] (f : TreeNode → α) (n : ℕ) : α
-  := ∑' (ν : setOfLevel n), f ν
+noncomputable def tsumOfLevel [AddCommMonoid α] [TopologicalSpace α] (f : 𝕍 → α) (n : ℕ) : α
+  := ∑' ν : 𝕍{n}, f ν
 
 lemma tsumOfLevel_eq_tsum_sum' [AddCommMonoid α] [TopologicalSpace α] [ContinuousAdd α] [T3Space α]
-  (f : TreeNode → α) (n : ℕ)
-  (hf1 : ∀ m, Summable fun c =>
-    (fun v : @Sigma ℕ (fun m => Set.seqDiff (setOfLevelOfValAtMost n) m) => f v.snd) ⟨m, c⟩)
-  (hf2 : Summable fun v : @Sigma ℕ (fun m => Set.seqDiff (setOfLevelOfValAtMost n) m) => f v.snd) :
-  tsumOfLevel f n = ∑' m : ℕ, ∑ ν : Set.seqDiff (setOfLevelOfValAtMost n) m, f ν := by
+  (f : 𝕍 → α) (n : ℕ)
+  (hf1 : ∀ m, Summable fun c => (fun v : @Sigma ℕ (fun m => 𝕍{n,m}) => f v.snd) ⟨m, c⟩)
+  (hf2 : Summable fun v : @Sigma ℕ (fun m => 𝕍{n,m}) => f v.snd) :
+  tsumOfLevel f n = ∑' m : ℕ, ∑ ν : 𝕍{n,m}, f ν := by
   set seqDiff := Set.seqDiff <| setOfLevelOfValAtMost n with hseqDiff
   have h0 (m : ℕ) : ∑' v : seqDiff m, f v = ∑ v : seqDiff m, f v := by rw [tsum_eq_sum]; simp
   have h1 := @Summable.tsum_sigma' α ℕ _ _ _ _ (fun m => Set.Elem <| seqDiff m) (fun x => f x.2)
@@ -205,15 +207,15 @@ lemma tsumOfLevel_eq_tsum_sum' [AddCommMonoid α] [TopologicalSpace α] [Continu
   have h2 := TreeNode.setOfLevelOfValAtMost_union_eq_setOfLevel n
   rw [←Set.iUnion_accumulate, Set.accumulate_eq_seqDiff_acculumate, ←hseqDiff,
     Set.iUnion_accumulate, Set.iUnion_eq_range_sigma] at h2
-  have h3 := @tsum_range α TreeNode (@Sigma ℕ fun b ↦ ↑(seqDiff b))
+  have h3 := @tsum_range α 𝕍 (@Sigma ℕ fun b ↦ ↑(seqDiff b))
     _ _ (fun a => ↑a.snd) (fun v => f v) (by simp [seqDiff]); simp at h3
   have := h1 ▸ h2 ▸ h3; conv at this => right; congr; ext m; rw [h0 m]
   exact this
 
 lemma tsumOfLevel_eq_tsum_sum [AddCommGroup α] [UniformSpace α] [IsUniformAddGroup α]
-  [CompleteSpace α] [T0Space α] (f : TreeNode → α) (n : ℕ)
-  (hf : Summable fun v : @Sigma ℕ (fun m => Set.seqDiff (setOfLevelOfValAtMost n) m) => f v.snd) :
-  tsumOfLevel f n = ∑' m : ℕ, ∑ ν : Set.seqDiff (setOfLevelOfValAtMost n) m, f ν := by
+  [CompleteSpace α] [T0Space α] (f : 𝕍 → α) (n : ℕ)
+  (hf : Summable fun v : @Sigma ℕ (fun m => 𝕍{n,m}) => f v.snd) :
+  tsumOfLevel f n = ∑' m : ℕ, ∑ ν : 𝕍{n,m}, f ν := by
   set seqDiff := Set.seqDiff <| setOfLevelOfValAtMost n with hseqDiff
   have h0 (m : ℕ) : ∑' v : seqDiff m, f v = ∑ v : seqDiff m, f v := by rw [tsum_eq_sum]; simp
   have h1 := @Summable.tsum_sigma α ℕ _ _ _ _ _ (fun m => Set.Elem <| seqDiff m) (fun x => f x.2)
@@ -221,7 +223,7 @@ lemma tsumOfLevel_eq_tsum_sum [AddCommGroup α] [UniformSpace α] [IsUniformAddG
   have h2 := TreeNode.setOfLevelOfValAtMost_union_eq_setOfLevel n
   rw [←Set.iUnion_accumulate, Set.accumulate_eq_seqDiff_acculumate, ←hseqDiff,
     Set.iUnion_accumulate, Set.iUnion_eq_range_sigma] at h2
-  have h3 := @tsum_range α TreeNode (@Sigma ℕ fun b ↦ ↑(seqDiff b))
+  have h3 := @tsum_range α 𝕍 (@Sigma ℕ fun b ↦ ↑(seqDiff b))
     _ _ (fun a => ↑a.snd) (fun v => f v) (by simp [seqDiff]); simp at h3
   have := h1 ▸ h2 ▸ h3; conv at this => right; congr; ext m; rw [h0 m]
   exact this
