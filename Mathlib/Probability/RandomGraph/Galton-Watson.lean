@@ -1,90 +1,122 @@
 import Mathlib.Probability.RandomGraph.RootedLabeledTree
+import Mathlib.Probability.HasLaw
+import Mathlib.Probability.HasLawExists
 import Mathlib.Probability.Independence.Basic
 import Mathlib.Probability.ProbabilityMassFunction.Basic
 
+open MeasureTheory Measure RootedLabeledTree LocallyFinite
+
 section GW
-variable {Ω : Type*} [mΩ : MeasurableSpace Ω]
 
-variable (ℙ : MeasureTheory.Measure Ω) (L : PMF ℕ) in
-class GaltonWatson where
-  toField (ω : Ω) : RootedLabeledTree.LocallyFinite
-  toProcess : TreeNode → Ω → ℕ
-  toProcess_def : toProcess = fun ν ω => toField ω ν
-  indep : ProbabilityTheory.iIndepFun (fun ν ↦ toProcess ν) ℙ
-  -- `sameLaw` requires `toProcess ν` to be AEMeasurable
-  sameLaw : ∀ ν, ℙ.map (toProcess ν) = L.toMeasure
+structure ProbabilitySpace where
+  space : Type*
+  space_measurable : MeasurableSpace space
+  space_measure : @MeasureTheory.Measure space space_measurable
+  space_measure_prob : MeasureTheory.IsProbabilityMeasure space_measure
 
-variable {ℙ : MeasureTheory.Measure Ω} {L : PMF ℕ} (GW : GaltonWatson ℙ L)
+instance (PS : ProbabilitySpace) : MeasurableSpace PS.space := PS.space_measurable
 
-noncomputable def measureGaltonWatson := ℙ.map GW.toField
+noncomputable instance : Inhabited ProbabilitySpace where
+  default := ⟨ℕ, _, dirac 0, dirac.isProbabilityMeasure⟩
+
+variable (L : PMF ℕ)
+
+class GaltonWatson extends ProbabilitySpace where
+  toField (ω : space) : RootedLabeledTree.LocallyFinite
+  toProcess : TreeNode → space → ℕ
+  toProcess_eq_toField : ∀ ω v, v ∈ toField ω → toProcess v ω = toField ω v
+  toProcess_measurable (v : TreeNode) : Measurable (toProcess v)
+  toProcess_hasLaw (v : TreeNode) : ProbabilityTheory.HasLaw (toProcess v) L.toMeasure space_measure
+  toProcess_iIndep : ProbabilityTheory.iIndepFun (fun v => toProcess v) space_measure
+
+export GaltonWatson (toProcess)
+
+attribute [measurability] GaltonWatson.toProcess_measurable
+
+noncomputable instance : Inhabited (GaltonWatson L) where
+  default := by
+    choose Ω mΩ ℙ X hX hX' hX'' hℙ using @ProbabilityTheory.exists_iid TreeNode ℕ _ L.toMeasure
+      (PMF.toMeasure.isProbabilityMeasure L)
+    set toField := fun ω => LocallyFinite.generateFromCountChildren (fun v => X v ω)
+    exact ⟨⟨Ω, mΩ, ℙ, hℙ⟩, toField, X, (by
+      simp; intro ω v hv; simp [toField, DFunLike.coe,
+        LocallyFinite.generateFromCountChildren_countChildren_eq (fun v => X v ω) v]
+      simp [toField, LocallyFinite.mem_iff, LocallyFinite.generateFromCountChildren,
+        RootedLabeledTree.mem_iff, RootedLabeledTree.generateFromCountChildren, generateTree] at hv
+      grind), hX, hX', hX''⟩
 
 namespace GaltonWatson
 
-variable (ν : TreeNode)
+variable {L : PMF ℕ} (GW : GaltonWatson L) (v : TreeNode) (ω : GW.space)
 
-open MeasureTheory Measure RootedLabeledTree LocallyFinite
+noncomputable def measureGaltonWatson := GW.space_measure.map GW.toField
 
-@[simp] instance toProcess_aemeasurable : AEMeasurable (GW.toProcess ν) ℙ := by
-  have := GW.sameLaw ν; simp [map] at this; split_ifs at this
-  · assumption
-  · exact False.elim <| Ne.symm (IsProbabilityMeasure.ne_zero L.toMeasure) this
+@[simp] lemma toProcess_aemeasurable : AEMeasurable (GW.toProcess v) GW.space_measure :=
+  (GW.toProcess_hasLaw v).aemeasurable
+
+@[simp] lemma toProcess_ennreal_aemeasurable :
+  AEMeasurable (fun ω => (GW.toProcess v ω : ENNReal)) GW.space_measure := by
+  apply AEMeasurable.nat_ofNat_toENNReal; simp
 
 @[simp] lemma toProcess_eq_countChildren :
-  (fun ω => (GW.toField ω).countChildren ν) = GW.toProcess ν := by
-  ext ω; simp [toProcess_def, RootedLabeledTree.LocallyFinite.instFunLikeTreeNodeNat]
+  (GW.toField ω).countChildren v = GW.toProcess v ω := by
+  -- simp [toProcess_eq_toField, RootedLabeledTree.LocallyFinite.instFunLikeTreeNodeNat]
+  sorry
 
-noncomputable def processGenerationSize : ℕ → Ω → ℕ :=
-  fun n ω => (GW.toField ω).generationSizeAtLevel n
+noncomputable def processGenerationSize : ℕ → GW.space → ℕ :=
+  fun n ω => if n = 0 then 1 else (GW.toField ω).generationSizeFromLevel (n - 1)
 
 @[simp] lemma processGenerationSize_ennreal_aemeasurable (n : ℕ) :
-  AEMeasurable (fun ω => (GW.processGenerationSize n ω : ENNReal)) ℙ := by
-  simp [processGenerationSize, generationSizeAtLevel_def, generationSizeAtLevel_eq_tsum_sum]
-
-
-  sorry
+  AEMeasurable (fun ω => (GW.processGenerationSize n ω : ENNReal)) GW.space_measure := by
+  by_cases h : n = 0
+  · simp [processGenerationSize, h]
+  · simp [processGenerationSize, h, generationSizeFromLevel_def_toRootedLabeledTree,
+      generationSizeFromLevel_eq_tsum_sum, ENNReal.tsum_eq_iSup_nat, ←countChildren_toENat,
+      toProcess_eq_countChildren]; apply AEMeasurable.iSup; intros
+    refine Finset.aemeasurable_fun_sum _ ?_; intros
+    refine Finset.aemeasurable_fun_sum _ ?_; intros; simp
 
 @[simp] lemma processGenerationSize_aemeasurable (n : ℕ) :
-  AEMeasurable (GW.processGenerationSize n) ℙ := by apply AEMeasurable.ennreal_ofNat_toNat; simp
+  AEMeasurable (GW.processGenerationSize n) GW.space_measure := by
+  apply AEMeasurable.ennreal_ofNat_toNat; simp
 
-#check ENNReal.measurable_of_measurable_nnreal
+@[simp] lemma processGenerationSize_zero : GW.processGenerationSize 0 = 1 := by
+  ext; simp [processGenerationSize]
 
-lemma processGenerationSize_eq₁ : GW.processGenerationSize = fun n ω =>
-  ∑' (ν : {ν : TreeNode // ν.length = n}), GW.toProcess ν ω := by
-  unfold processGenerationSize; ext n ω
-  -- have := tsum_fintype
-  -- have := tsum_eq_finsum
-  -- have := Finset.sum
-  -- have := sum_eq_tsum_indicator
-  -- have := Set.Finite.subtypeEquivToFinset
-  -- have := Equiv.sum_comp
-  -- have := summable_of_finite_support
-  -- have := aemeasurable_of_tendsto_metrizable_ae
-  -- have := aemeasurable_of_tendsto_metrizable_ae'
+@[simp] lemma processGenerationSize_one : GW.processGenerationSize 1 = GW.toProcess [] := by
+  unfold processGenerationSize; simp [generationSizeFromLevel_def_toSum, setOfLevel]
+
+end GaltonWatson
+
+namespace GaltonWatson
+
+variable (GW : GaltonWatson L) (v : TreeNode) (ω : GW.space)
+
+open GaltonWatson ProbabilityTheory
+
+@[simp, measurability] lemma toField_measurable : Measurable (GW.toField) := by
 
   sorry
 
-@[simp] lemma processGenerationSize_zero : GW.processGenerationSize 0 = 1 := by
-  unfold processGenerationSize; simp [generationSizeAtLevel]; rfl
+@[simp] instance measureGaltonWatson_isProbabilityMeasure :
+  IsProbabilityMeasure GW.measureGaltonWatson := by sorry
 
-@[simp] lemma processGenerationSize_one : GW.processGenerationSize 1 = GW.toProcess [] := by
-  unfold processGenerationSize; simp [generationSizeAtLevel, setOfLevel]
+@[simp, measurability] lemma toProcess_ennreal_measurable :
+  Measurable (fun ω => (GW.toProcess v ω : ENNReal)) := by
+  apply Measurable.nat_ofNat_toENNReal; measurability
 
-#check List.aemeasurable_sum
-#check List.aemeasurable_fun_sum
-#check aemeasurable_of_tendsto_metrizable_ae
-#check aemeasurable_of_tendsto_metrizable_ae'
-#check ENNReal.aemeasurable_of_tendsto
-#check ENNReal.aemeasurable_of_tendsto'
+@[simp, measurability] lemma processGenerationSize_ennreal_measurable (n : ℕ) :
+  Measurable (fun ω => (GW.processGenerationSize n ω : ENNReal)) := by
+  by_cases h : n = 0
+  · simp [processGenerationSize, h]
+  · simp [processGenerationSize, h, generationSizeFromLevel_def_toRootedLabeledTree,
+      generationSizeFromLevel_eq_tsum_sum, ENNReal.tsum_eq_iSup_nat, ←countChildren_toENat,
+      toProcess_eq_countChildren]; apply Measurable.iSup; intros
+    refine Finset.measurable_fun_sum _ ?_; intros
+    refine Finset.measurable_fun_sum _ ?_; intros; measurability
 
-@[simp] instance processGenerationSize_aemeasurable (n : ℕ) : AEMeasurable (GW.processGenerationSize n) ℙ := by
-  match n with
-  | 0 => simp; exact aemeasurable_const
-  | 1 => simp
-  | n + 2 =>
-    unfold processGenerationSize; simp [generationSizeAtLevel]
-    exact @Finset.aemeasurable_fun_sum ℕ _ _ _ _ _ _ _ _ (by
-      exact ((↑(GW.toField ℙ L ω)).setOfLevel (n + 1)).toFinset) (fun ν _ =>
-      toProcess_eq_countChildren GW ν ▸ toProcess_aemeasurable GW ν)
+@[simp, measurability] lemma processGenerationSize_measurable (n : ℕ) :
+  Measurable (GW.processGenerationSize n) := by apply Measurable.ennreal_ofNat_toNat; simp
 
 end GaltonWatson
 
@@ -99,13 +131,15 @@ end ProbabilityGeneratingFunction
 
 namespace GaltonWatson
 
+variable (GW : GaltonWatson L)
+
 def eventExtinction := { ω | ∃ n, GW.processGenerationSize n ω = 0 }
 
 -- lemma eventExtinction_ofAEIsTree :
 --   GW.eventExtinction = { ω | ∃ n, GW.toProcess.forestSize_atMostK_atLevel 0 n ω = 0 } := sorry
 
-def eventExtinction_measurable : MeasurableSet (GW.eventExtinction) := by
-
+lemma eventExtinction_measurable : MeasurableSet (GW.eventExtinction) := by
+  simp only [eventExtinction]; conv => congr;
   sorry
 
 end GaltonWatson
