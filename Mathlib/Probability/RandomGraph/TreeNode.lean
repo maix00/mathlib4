@@ -121,6 +121,10 @@ def setOfLevelAtMost (n : ℕ) : Set 𝕍 := {v | v.length ≤ n}
 
 scoped[TreeNode] notation "𝕍{≤" n "}" => setOfLevelAtMost n
 
+@[simp] lemma setOfLevel_zero : 𝕍{0} = {[]} := by simp [setOfLevel]
+
+@[simp] lemma setOfLevelAtMost_zero : 𝕍{≤0} = {[]} := by simp [setOfLevelAtMost]
+
 instance instCountableSetTreeNodeOfLength (n : ℕ) : Countable 𝕍{n} := by
   simp [setOfLevel]; exact Subtype.countable
 

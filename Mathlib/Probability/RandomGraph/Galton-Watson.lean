@@ -42,7 +42,7 @@ noncomputable instance : Inhabited (GaltonWatson L) where
       simp; intro ω v hv; simp [toField, DFunLike.coe,
         LocallyFinite.generateFromCountChildren_countChildren_eq (fun v => X v ω) v]
       simp [toField, LocallyFinite.mem_iff, LocallyFinite.generateFromCountChildren,
-        RLTree.mem_iff, RLTree.generateFromCountChildren, generateTree] at hv
+        RLTree.generateFromCountChildren, generateTree] at hv
       grind), hX, hX', hX''⟩
 
 namespace GaltonWatson
@@ -84,7 +84,7 @@ noncomputable def processGenerationSize : ℕ → GW.space → ℕ :=
   ext; simp [processGenerationSize]
 
 @[simp] lemma processGenerationSize_one : GW.processGenerationSize 1 = GW.toProcess [] := by
-  unfold processGenerationSize; simp [generationSizeFromLevel_def_toSum, setOfLevel]
+  unfold processGenerationSize; simp [generationSizeFromLevel_as_sum, setOfLevel]
 
 end GaltonWatson
 
