@@ -27,7 +27,7 @@ lemma seqDiff_def : seqDiff seq = fun m => if m = 0 then seq 0 else
   unfold seqDiff; ext; split_ifs <;> simp only [diff_empty, mem_accumulate]; grind
 
 lemma accumulate_of_mono (hseq : Monotone seq) : Set.Accumulate seq = seq := by
-  ext m x; simp [Set.Accumulate]; constructor
+  ext m x; simp only [Accumulate, mem_iUnion, exists_prop]; constructor
   · intro ⟨n, hn, hn'⟩; exact Set.mem_of_subset_of_mem (hseq hn) hn'
   · intro; use m
 
@@ -49,9 +49,11 @@ lemma accumulate_eq_seqDiff_acculumate :
       simp only [Set.mem_union] at hx ⊢
       by_cases hx' : x ∈ ⋃ n ≤ m, seq n
       · left; exact ih hx'
-      · right; have hx := Or.resolve_left hx hx'; simp [Set.seqDiff]; constructor
+      · right; have hx := Or.resolve_left hx hx'; simp only [seqDiff, Nat.add_eq_zero_iff,
+        one_ne_zero, and_false, ↓reduceIte, add_tsub_cancel_right, mem_diff, mem_accumulate,
+        not_exists, not_and]; constructor
         · use m + 1
-        · simp at hx'; exact hx'
+        · simp only [mem_iUnion, exists_prop, not_exists, not_and] at hx'; exact hx'
   · intro hx; simp only [Set.Accumulate] at hx ⊢; induction m with
     | zero => simp [Set.seqDiff] at hx; simp [*]
     | succ m ih =>
@@ -60,35 +62,45 @@ lemma accumulate_eq_seqDiff_acculumate :
       simp only [Set.mem_union] at hx ⊢
       by_cases hx' : x ∈ ⋃ n ≤ m, Set.seqDiff seq n
       · left; exact ih hx'
-      · right; have hx := Or.resolve_left hx hx'; simp [Set.seqDiff] at hx
+      · right; have hx := Or.resolve_left hx hx'; simp only [seqDiff, Nat.add_eq_zero_iff,
+        one_ne_zero, and_false, ↓reduceIte, add_tsub_cancel_right, mem_diff, mem_accumulate,
+        not_exists, not_and] at hx
         obtain ⟨⟨n, hn, hn'⟩, hn''⟩ := hx
         exact (show n = m + 1 from by by_contra; exact hn'' n (by omega) hn') ▸ hn'
 
 @[simp] lemma seqDiff_pairwise_disjoint :
   Pairwise (Function.onFun Disjoint (Set.seqDiff seq)) := by
-  simp [pairwise_disjoint_on, Disjoint]; intro m n hmn x hxm hxn
-  unfold Set.seqDiff at hxm; simp [Set.Accumulate] at hxm; induction m with
+  simp only [pairwise_disjoint_on, Disjoint, le_eq_subset, bot_eq_empty, subset_empty_iff]
+  intro m n hmn x hxm hxn; unfold Set.seqDiff at hxm; simp only [Accumulate] at hxm
+  induction m with
   | zero =>
-    simp at hxm; cases n with
+    simp only [nonpos_iff_eq_zero, iUnion_iUnion_eq_left, ↓reduceIte, diff_empty] at hxm
+    cases n with
     | zero => contradiction
     | succ n =>
-      simp [Set.seqDiff, Set.Accumulate, Set.subset_diff, Disjoint] at hxn
+      simp only [seqDiff, Accumulate, Nat.add_eq_zero_iff, one_ne_zero, and_false, ↓reduceIte,
+        add_tsub_cancel_right, subset_diff, Disjoint, le_eq_subset, bot_eq_empty,
+        subset_empty_iff] at hxn
       exact @hxn.2 x (by simp) (by
         apply trans hxm; apply Set.subset_iUnion₂ (s := fun i => fun (_ : i ≤ n) => seq i) 0; omega)
   | succ m ih =>
     cases n with
     | zero => contradiction
     | succ n =>
-      simp [Set.seqDiff, Set.Accumulate, Set.subset_diff, Disjoint] at hxn
-      simp [Set.iUnion₂_le_succ seq m, Set.subset_diff] at hxm
+      simp only [seqDiff, Accumulate, Nat.add_eq_zero_iff, one_ne_zero, and_false, ↓reduceIte,
+        add_tsub_cancel_right, subset_diff, Disjoint, le_eq_subset, bot_eq_empty,
+        subset_empty_iff] at hxn
+      simp only [Set.iUnion₂_le_succ seq m, Nat.add_eq_zero_iff, one_ne_zero, and_false, ↓reduceIte,
+        add_tsub_cancel_right, union_diff_left, subset_diff, disjoint_iUnion_right] at hxm
       exact @hxn.2 x (by simp) (by
         apply trans hxm.1
         apply Set.subset_iUnion₂ (s := fun i => fun (_ : i ≤ n) => seq i) (m + 1); omega)
 
 @[simp] lemma seqDiff_sigma_snd_injective : Function.Injective
   fun (x : Sigma (fun n => Set.seqDiff seq n)) => x.snd.val := by
-  intro x1 x2 h12; simp at h12; ext
-  · by_contra h; have h := Set.seqDiff_pairwise_disjoint seq h; simp [Disjoint] at h
+  intro x1 x2 h12; simp only at h12; ext
+  · by_contra h; have h := Set.seqDiff_pairwise_disjoint seq h; simp only [Disjoint, le_eq_subset,
+    bot_eq_empty, subset_empty_iff] at h
     specialize @h {x1.snd.val} (by simp) (by simp [h12]); absurd h; simp
   · assumption
 
@@ -99,12 +111,12 @@ lemma accumulate_eq_seqDiff_acculumate :
 
 @[simp] lemma seqDiff_finite_of_finite (hseq : ∀ n, Set.Finite (seq n)) (n : ℕ) :
   Set.Finite (Set.seqDiff seq n) := by
-  simp [Set.seqDiff, Set.Accumulate]
+  simp only [seqDiff, Accumulate]
   apply fun h => @Finite.Set.finite_diff _ _ _ h
   apply Set.finite_coe_iff.2
   have : ⋃ m, ⋃ (_ : m ≤ n), seq m = ⋃ (m : {m // m ≤ n}), seq ↑m := by
     ext; simp_all only [Set.mem_iUnion, exists_prop, Subtype.exists]
-  rw [this]; apply Set.finite_iUnion; simp; intro m _; exact hseq m
+  rw [this]; apply Set.finite_iUnion; simp only [Subtype.forall]; intro m _; exact hseq m
 
 noncomputable instance instFintypeSeqDiffOfFinite (hseq : ∀ n, Set.Finite (seq n))
   (n : ℕ) : Fintype ↑(Set.seqDiff seq n) := Set.Finite.fintype <| (by simp [*])
@@ -126,14 +138,14 @@ scoped[TreeNode] notation "𝕍{≤" n "}" => setOfLevelAtMost n
 @[simp] lemma setOfLevelAtMost_zero : 𝕍{≤0} = {[]} := by simp [setOfLevelAtMost]
 
 instance instCountableSetTreeNodeOfLength (n : ℕ) : Countable 𝕍{n} := by
-  simp [setOfLevel]; exact Subtype.countable
+  simp only [setOfLevel, Set.coe_setOf]; exact Subtype.countable
 
 instance instCountableSetTreeNodeOfLengthAtMost (n : ℕ) : Countable 𝕍{≤n} := by
-  simp [setOfLevelAtMost]; exact Subtype.countable
+  simp only [setOfLevelAtMost, Set.coe_setOf]; exact Subtype.countable
 
 lemma setOfLevelAtMost_eq_iUnion_finset_setOfLevel (n : ℕ) :
   𝕍{≤n} = ⋃ k : Finset.range (n + 1), 𝕍{k} := by
-  simp [setOfLevelAtMost, setOfLevel]; ext v; simp; omega
+  simp only [setOfLevelAtMost, setOfLevel]; ext v; simp; omega
 
 def setOfLevelOfValAtMost (n m : ℕ) : Set 𝕍 :=
   ⋃ f : Fin n → Fin (m + 1), {(List.ofFn f).map Fin.val}
@@ -145,11 +157,14 @@ scoped[TreeNode] notation "𝕍{" n ",≤" m "}" => setOfLevelOfValAtMost n m
 
 @[simp] lemma setOfLevelOfValAtMost_zero_seqDiff :
   Set.seqDiff (setOfLevelOfValAtMost 0) = fun m => if m = 0 then {[]} else ∅ := by
-  simp; unfold Set.seqDiff; simp [Set.Accumulate]; ext m v; by_cases h : m = 0
+  simp only [setOfLevelOfValAtMost_zero]; unfold Set.seqDiff
+  simp only [Set.Accumulate]; ext m v; by_cases h : m = 0
   · simp [h]
   · conv => left; congr; arg 2; simp [h]
     conv => right; congr; simp [h]
-    have (m : ℕ) : ⋃ y, ⋃ (_ : y ≤ m), {([] : List ℕ)} = {[]} := by ext; simp; intro; use 0; omega
+    have (m : ℕ) : ⋃ y, ⋃ (_ : y ≤ m), {([] : List ℕ)} = {[]} := by
+      ext; simp only [Set.mem_iUnion, Set.mem_singleton_iff, exists_prop, exists_and_right,
+      and_iff_right_iff_imp]; intro; use 0; omega
     rw [this m, this (m - 1)]; simp
 
 instance instFiniteSetTreeNodeOfLengthTruncated (n m : ℕ) : Set.Finite 𝕍{n,≤m} := by
@@ -162,24 +177,26 @@ noncomputable instance instFintypeSetTreeNodeOfLengthTruncated (n m : ℕ) : Fin
   simp [Set.subset_def, setOfLevelOfValAtMost, setOfLevel]
 
 @[simp] lemma setOfLevelOfValAtMost_mono (n : ℕ) : Monotone (setOfLevelOfValAtMost n) := by
-  intro m1 m2 h12; simp [Set.subset_def, setOfLevelOfValAtMost]; intro f
-  use Fin.castLE (show m1 + 1 ≤ m2 + 1 from by omega) ∘ f; ext; simp
+  intro m1 m2 h12; simp only [setOfLevelOfValAtMost, List.map_ofFn, Set.iUnion_singleton_eq_range,
+    Set.le_eq_subset, Set.subset_def, Set.mem_range, forall_exists_index, forall_apply_eq_imp_iff,
+    List.ofFn_inj]; intro f; use Fin.castLE (show m1 + 1 ≤ m2 + 1 from by omega) ∘ f; ext; simp
 
 @[simp] lemma setOfLevelOfValAtMost_union_eq_setOfLevel (n : ℕ) : ⋃ m : ℕ, 𝕍{n,≤m} = 𝕍{n} := by
   ext v; simp only [Set.mem_iUnion]; constructor
   · intro ⟨m, h⟩; exact Set.mem_of_subset_of_mem (by simp) h
   · intro h; by_cases h' : n = 0
-    · simp [setOfLevel] at h
+    · simp only [setOfLevel, Set.mem_setOf_eq] at h
       have : v = [] := List.eq_nil_iff_length_eq_zero.2 <| h' ▸ h
       use 0; simp [setOfLevelOfValAtMost, *]
     · simp only [setOfLevel, Set.mem_setOf_eq] at h
       set m := v.max? with hm
       have : ∃ m', m = some m' := by
         match v with
-        | [] => absurd h; simp; exact Ne.symm h'
+        | [] => absurd h; simp only [List.length_nil]; exact Ne.symm h'
         | n' :: v' => simp only [List.max?_cons] at hm; simp only [hm, Option.some.injEq,
           exists_eq']
-      obtain ⟨m', hm'⟩ := this; use m'; simp [setOfLevelOfValAtMost]
+      obtain ⟨m', hm'⟩ := this; use m'; simp only [setOfLevelOfValAtMost, List.map_ofFn,
+        Set.iUnion_singleton_eq_range, Set.mem_range]
       use fun ⟨i, hi⟩ => ⟨v[i], by
         have := List.le_max?_get_of_mem (show v[i] ∈ v from by simp)
         conv at this => right; congr; simp [←(hm' ▸ hm)]
@@ -207,12 +224,12 @@ lemma tsumOfLevel_eq_tsum_sum' [AddCommMonoid α] [TopologicalSpace α] [Continu
   set seqDiff := Set.seqDiff <| setOfLevelOfValAtMost n with hseqDiff
   have h0 (m : ℕ) : ∑' v : seqDiff m, f v = ∑ v : seqDiff m, f v := by rw [tsum_eq_sum]; simp
   have h1 := @Summable.tsum_sigma' α ℕ _ _ _ _ (fun m => Set.Elem <| seqDiff m) (fun x => f x.2)
-    hf1 hf2; simp at h1
+    hf1 hf2; simp only at h1
   have h2 := TreeNode.setOfLevelOfValAtMost_union_eq_setOfLevel n
   rw [←Set.iUnion_accumulate, Set.accumulate_eq_seqDiff_acculumate, ←hseqDiff,
     Set.iUnion_accumulate, Set.iUnion_eq_range_sigma] at h2
   have h3 := @tsum_range α 𝕍 (@Sigma ℕ fun b ↦ ↑(seqDiff b))
-    _ _ (fun a => ↑a.snd) (fun v => f v) (by simp [seqDiff]); simp at h3
+    _ _ (fun a => ↑a.snd) (fun v => f v) (by simp [seqDiff]); simp only at h3
   have := h1 ▸ h2 ▸ h3; conv at this => right; congr; ext m; rw [h0 m]
   exact this
 
@@ -223,12 +240,12 @@ lemma tsumOfLevel_eq_tsum_sum [AddCommGroup α] [UniformSpace α] [IsUniformAddG
   set seqDiff := Set.seqDiff <| setOfLevelOfValAtMost n with hseqDiff
   have h0 (m : ℕ) : ∑' v : seqDiff m, f v = ∑ v : seqDiff m, f v := by rw [tsum_eq_sum]; simp
   have h1 := @Summable.tsum_sigma α ℕ _ _ _ _ _ (fun m => Set.Elem <| seqDiff m) (fun x => f x.2)
-    hf; simp at h1
+    hf; simp only at h1
   have h2 := TreeNode.setOfLevelOfValAtMost_union_eq_setOfLevel n
   rw [←Set.iUnion_accumulate, Set.accumulate_eq_seqDiff_acculumate, ←hseqDiff,
     Set.iUnion_accumulate, Set.iUnion_eq_range_sigma] at h2
   have h3 := @tsum_range α 𝕍 (@Sigma ℕ fun b ↦ ↑(seqDiff b))
-    _ _ (fun a => ↑a.snd) (fun v => f v) (by simp [seqDiff]); simp at h3
+    _ _ (fun a => ↑a.snd) (fun v => f v) (by simp [seqDiff]); simp only at h3
   have := h1 ▸ h2 ▸ h3; conv at this => right; congr; ext m; rw [h0 m]
   exact this
 
