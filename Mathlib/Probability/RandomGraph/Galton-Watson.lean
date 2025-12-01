@@ -1,4 +1,6 @@
-import Mathlib.Probability.RandomGraph.RootedLabeledTree
+import Mathlib.Probability.RandomGraph.Measurability
+import Mathlib.Probability.RandomGraph.Tree.RootedLabeledTree.Basic
+import Mathlib.Probability.RandomGraph.Tree.RootedLabeledTree.GenerateFromCount
 import Mathlib.Probability.HasLaw
 import Mathlib.Probability.HasLawExists
 import Mathlib.Probability.Independence.Basic
@@ -39,7 +41,7 @@ noncomputable instance : Inhabited (GaltonWatson L) where
       (PMF.toMeasure.isProbabilityMeasure L)
     set toField := fun ω => LocallyFinite.generateFromCountChildren (fun v => X v ω)
     exact ⟨⟨Ω, mΩ, ℙ, hℙ⟩, toField, X, (by
-      simp; intro ω v hv; simp [toField, DFunLike.coe,
+      simp only; intro ω v hv; simp [toField, DFunLike.coe,
         LocallyFinite.generateFromCountChildren_countChildren_eq (fun v => X v ω) v]
       simp [toField, LocallyFinite.mem_iff, LocallyFinite.generateFromCountChildren,
         RLTree.generateFromCountChildren, generateTree] at hv
@@ -70,9 +72,9 @@ noncomputable def processGenerationSize : ℕ → GW.space → ℕ :=
   AEMeasurable (fun ω => (GW.processGenerationSize n ω : ENNReal)) GW.space_measure := by
   by_cases h : n = 0
   · simp [processGenerationSize, h]
-  · simp [processGenerationSize, h, generationSizeFromLevel_def_toRLTree,
-      generationSizeFromLevel_eq_tsum_sum, ENNReal.tsum_eq_iSup_nat, ←countChildren_toENat,
-      toProcess_eq_countChildren]; apply AEMeasurable.iSup; intros
+  · simp only [processGenerationSize, h, ↓reduceIte, generationSizeFromLevel_def_toRLTree,
+    generationSizeFromLevel_eq_tsum_sum, ← countChildren_toENat, toProcess_eq_countChildren,
+    ENat.toENNReal_coe, ENNReal.tsum_eq_iSup_nat]; apply AEMeasurable.iSup; intros
     refine Finset.aemeasurable_fun_sum _ ?_; intros
     refine Finset.aemeasurable_fun_sum _ ?_; intros; simp
 
@@ -84,7 +86,7 @@ noncomputable def processGenerationSize : ℕ → GW.space → ℕ :=
   ext; simp [processGenerationSize]
 
 @[simp] lemma processGenerationSize_one : GW.processGenerationSize 1 = GW.toProcess [] := by
-  unfold processGenerationSize; simp [generationSizeFromLevel_as_sum, setOfLevel]
+  unfold processGenerationSize; simp [generationSizeFromLevel_as_sum]
 
 end GaltonWatson
 
@@ -109,9 +111,9 @@ open GaltonWatson ProbabilityTheory
   Measurable (fun ω => (GW.processGenerationSize n ω : ENNReal)) := by
   by_cases h : n = 0
   · simp [processGenerationSize, h]
-  · simp [processGenerationSize, h, generationSizeFromLevel_def_toRLTree,
-      generationSizeFromLevel_eq_tsum_sum, ENNReal.tsum_eq_iSup_nat, ←countChildren_toENat,
-      toProcess_eq_countChildren]; apply Measurable.iSup; intros
+  · simp only [processGenerationSize, h, ↓reduceIte, generationSizeFromLevel_def_toRLTree,
+    generationSizeFromLevel_eq_tsum_sum, ← countChildren_toENat, toProcess_eq_countChildren,
+    ENat.toENNReal_coe, ENNReal.tsum_eq_iSup_nat]; apply Measurable.iSup; intros
     refine Finset.measurable_fun_sum _ ?_; intros
     refine Finset.measurable_fun_sum _ ?_; intros; measurability
 
@@ -144,6 +146,3 @@ lemma eventExtinction_measurable : MeasurableSet (GW.eventExtinction) := by
 
 end GaltonWatson
 end GW
-
-
-#check Set.finite_iUnion
